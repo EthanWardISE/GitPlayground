@@ -1,3 +1,3 @@
-# GitPlayground Blog Test
+# GitPlayground Blog Test BRANCH
 
-This is my first README.md file, git test for ISE.
+This is my first README.md file, git test for ISE. Also this is a branch.
