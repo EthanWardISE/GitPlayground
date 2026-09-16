@@ -1,6 +1,7 @@
 ---
 title: 'Main utilities in git'
 description: 'ISE Test'
+author: 'ethan'
 pubDate: 'Sept 09 2026'
 heroImage: '../../assets/blog-placeholder-3.jpg'
 ---
