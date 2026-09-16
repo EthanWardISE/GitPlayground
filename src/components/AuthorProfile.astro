@@ -1,0 +1,75 @@
+---
+import { Image } from 'astro:assets';
+import type { CollectionEntry } from 'astro:content';
+
+type Props = {
+	author: CollectionEntry<'authors'>['data'];
+};
+
+const { author } = Astro.props;
+---
+
+<section class="author-profile" aria-labelledby="author-heading">
+	<Image class="author-avatar" src={author.avatar} alt={`Portrait of ${author.name}`} width={96} height={96} />
+	<div class="author-details">
+		<p class="author-label">About the author</p>
+		<h2 id="author-heading">{author.name}</h2>
+		<p>{author.bio}</p>
+		{
+			author.social && Object.entries(author.social).length > 0 && (
+				<nav aria-label={`${author.name}'s social links`}>
+					<ul>
+						{Object.entries(author.social).map(([network, url]) => (
+							<li><a href={url} rel="me" target="_blank">{network}</a></li>
+						))}
+					</ul>
+				</nav>
+			)
+		}
+	</div>
+</section>
+
+<style>
+	.author-profile {
+		display: flex;
+		gap: 1.25rem;
+		align-items: flex-start;
+		margin-top: 3rem;
+		padding-top: 2rem;
+		border-top: 1px solid rgb(var(--gray-light));
+	}
+	.author-avatar {
+		width: 96px;
+		height: 96px;
+		flex: 0 0 96px;
+		object-fit: cover;
+		border-radius: 50%;
+	}
+	.author-details h2,
+	.author-details p {
+		margin: 0;
+	}
+	.author-details h2 {
+		margin-bottom: 0.5rem;
+	}
+	.author-label {
+		margin-bottom: 0.25rem !important;
+		color: rgb(var(--gray));
+		font-size: 0.85rem;
+		font-weight: bold;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	nav ul {
+		display: flex;
+		gap: 1rem;
+		padding: 0;
+		margin: 0.75rem 0 0;
+		list-style: none;
+	}
+	@media (max-width: 480px) {
+		.author-profile {
+			flex-direction: column;
+		}
+	}
+</style>
