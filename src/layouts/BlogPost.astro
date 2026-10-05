@@ -7,13 +7,13 @@ import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
 import AuthorProfile from '../components/AuthorProfile.astro';
 
-type Props = CollectionEntry<'blog'>['data'];
-
 type Author = CollectionEntry<'authors'>['data'];
 
-const { title, description, pubDate, updatedDate, heroImage, author } = Astro.props as Props & {
+type Props = Omit<CollectionEntry<'blog'>['data'], 'author'> & {
 	author?: Author;
 };
+
+const { title, description, pubDate, updatedDate, heroImage, author } = Astro.props;
 ---
 
 <html lang="en">

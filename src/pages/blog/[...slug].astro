@@ -1,21 +1,32 @@
 ---
-import { type CollectionEntry, getCollection, getEntry, render } from 'astro:content';
+import { getEntry, render } from 'astro:content';
 import BlogPost from '../../layouts/BlogPost.astro';
 
-export async function getStaticPaths() {
-	const posts = await getCollection('blog');
-	return posts.map((post) => ({
-		params: { slug: post.id },
-		props: post,
-	}));
-}
-type Props = CollectionEntry<'blog'>;
+const slug = Astro.params.slug;
+const post = slug ? await getEntry('blog', slug) : undefined;
+const blogPost = post
+	? (({ author: authorId, ...data }) => ({ authorId, data }))(post.data)
+	: undefined;
 
-const post = Astro.props;
-const author = await getEntry('authors', post.data.author);
-const { Content } = await render(post);
+if (!post) {
+	Astro.response.status = 404;
+}
+
+const author = blogPost ? await getEntry('authors', blogPost.authorId) : undefined;
+
+if (post && blogPost && !author) {
+	throw new Error(`Author "${blogPost.authorId}" was not found for blog post "${post.id}".`);
+}
+
+const Content = post ? (await render(post)).Content : undefined;
 ---
 
-<BlogPost {...post.data} author={author.data}>
-	<Content />
-</BlogPost>
+{
+	post && blogPost && author && Content ? (
+		<BlogPost {...blogPost.data} author={author.data}>
+			<Content />
+		</BlogPost>
+	) : (
+		<p>Blog post not found.</p>
+	)
+}
