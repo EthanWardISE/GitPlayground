@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { AppwriteException } from 'appwrite';
-import type { Models } from 'appwrite';
-import { appwriteConfig, createAppwriteServices, ID, Permission, Query, Role } from '../lib/appwrite';
-import type { CommentDocument, PhotoDocument, ProfileDocument } from '../types/database';
+import type { User } from '@supabase/supabase-js';
+import { createSupabaseClient, PHOTO_BUCKET, supabaseConfigured } from '../lib/supabase';
+import type { CommentDocument, CommentRow, PhotoDocument, ProfileDocument, ProfileRow } from '../types/database';
 
 type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'setup' | 'error';
-type AppUser = Pick<Models.User<Models.Preferences>, '$id' | 'name' | 'email'>;
+interface AppUser {
+	$id: string;
+	name: string;
+	email: string;
+}
 
 interface FamilyAppProps {
 	view?: 'feed' | 'tree' | 'person';
@@ -38,17 +41,46 @@ function initials(name: string) {
 }
 
 function getMessage(error: unknown): string {
-	return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+	if (error instanceof Error) return error.message;
+	if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message;
+	return 'Something went wrong. Please try again.';
 }
 
-function isUnauthenticated(error: unknown): boolean {
-	return error instanceof AppwriteException && error.code === 401;
+function toAppUser(user: User): AppUser {
+	return {
+		$id: user.id,
+		name: typeof user.user_metadata.full_name === 'string' ? user.user_metadata.full_name : user.email ?? 'Family member',
+		email: user.email ?? '',
+	};
+}
+
+function toProfile(profile: ProfileRow): ProfileDocument {
+	return {
+		$id: profile.id,
+		name: profile.name,
+		avatarFileId: profile.avatar_file_path ?? undefined,
+		birthYear: profile.birth_year ?? undefined,
+		parentId1: profile.parent_id1 ?? undefined,
+		parentId2: profile.parent_id2 ?? undefined,
+	};
+}
+
+function toComment(comment: CommentRow): CommentDocument {
+	return {
+		$id: comment.id,
+		photoId: comment.photo_id,
+		authorId: comment.author_id,
+		authorName: comment.author_name,
+		content: comment.content,
+		createdAt: comment.created_at,
+	};
 }
 
 export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 	const [status, setStatus] = useState<AppStatus>('loading');
 	const [user, setUser] = useState<AppUser | null>(null);
 	const [error, setError] = useState('');
+	const [authNotice, setAuthNotice] = useState('');
 	const [profiles, setProfiles] = useState<ProfileDocument[]>([]);
 	const [photos, setPhotos] = useState<PhotoDocument[]>([]);
 	const [selectedPhoto, setSelectedPhoto] = useState<PhotoDocument | null>(null);
@@ -57,35 +89,44 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 	const [showUpload, setShowUpload] = useState(false);
 	const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
-	const configReady = Object.values(appwriteConfig).every(Boolean);
-	const photoUrl = useCallback((fileId: string) => {
-		const services = createAppwriteServices();
-		return services.storage.getFileView(appwriteConfig.storageBucketId, fileId);
-	}, []);
+	const configReady = supabaseConfigured;
 
 	const loadFamilyData = useCallback(async () => {
-		const services = createAppwriteServices();
-		const [profileList, photoList] = await Promise.all([
-			services.databases.listDocuments<ProfileDocument>(
-				appwriteConfig.databaseId,
-				appwriteConfig.profilesCollectionId,
-				[Query.orderAsc('name'), Query.limit(100)],
-			),
-			services.databases.listDocuments<PhotoDocument>(
-				appwriteConfig.databaseId,
-				appwriteConfig.photosCollectionId,
-				[Query.orderDesc('year'), Query.limit(100)],
-			),
+		const supabase = createSupabaseClient();
+		const [profileResult, photoResult] = await Promise.all([
+			supabase.from('profiles').select('*').order('name').limit(100),
+			supabase.from('photos').select('*').order('year', { ascending: false }).limit(100),
 		]);
-		setProfiles(profileList.documents);
-		setPhotos(photoList.documents);
+		if (profileResult.error) throw profileResult.error;
+		if (photoResult.error) throw photoResult.error;
+
+		const photoDocuments = await Promise.all(photoResult.data.map(async (photo): Promise<PhotoDocument> => {
+			const { data, error: signedUrlError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(photo.file_path, 60 * 60);
+			if (signedUrlError) throw signedUrlError;
+			return {
+				$id: photo.id,
+				title: photo.title ?? undefined,
+				fileId: photo.file_path,
+				year: photo.year,
+				uploadedBy: photo.uploaded_by,
+				taggedProfiles: photo.tagged_profiles,
+				imageUrl: data.signedUrl,
+			};
+		}));
+
+		setProfiles(profileResult.data.map(toProfile));
+		setPhotos(photoDocuments);
 	}, []);
 
 	const checkMembership = useCallback(async (activeUser: AppUser) => {
-		const services = createAppwriteServices();
-		const teamList = await services.teams.list({ total: false });
+		const { data: membership, error: membershipError } = await createSupabaseClient()
+			.from('family_members')
+			.select('user_id')
+			.eq('user_id', activeUser.$id)
+			.maybeSingle();
+		if (membershipError) throw membershipError;
 		setUser(activeUser);
-		if (!teamList.teams.some((team) => team.$id === appwriteConfig.familyTeamId)) {
+		if (!membership) {
 			setStatus('pending');
 			return;
 		}
@@ -99,14 +140,16 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 			return;
 		}
 
-		const services = createAppwriteServices();
-		services.account.get()
-			.then((activeUser) => checkMembership(activeUser))
-			.catch((authError: unknown) => {
-				if (isUnauthenticated(authError)) {
+		createSupabaseClient().auth.getUser()
+			.then(async ({ data, error: authError }) => {
+				if (authError) throw authError;
+				if (!data.user) {
 					setStatus('signedOut');
 					return;
 				}
+				await checkMembership(toAppUser(data.user));
+			})
+			.catch((authError: unknown) => {
 				setError(getMessage(authError));
 				setStatus('error');
 			});
@@ -132,12 +175,29 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 		const password = String(data.get('password') ?? '');
 		const name = String(data.get('name') ?? '').trim();
 		try {
-			const services = createAppwriteServices();
+			const supabase = createSupabaseClient();
 			if (authMode === 'signup') {
-				await services.account.create({ userId: ID.unique(), email, password, name });
+				const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+					email,
+					password,
+					options: {
+						data: { full_name: name },
+						emailRedirectTo: window.location.origin,
+					},
+				});
+				if (signUpError) throw signUpError;
+				if (!signUpData.user) throw new Error('Supabase did not return the new account. Please try signing up again.');
+				if (!signUpData.session) {
+					setAuthNotice('Account created. Check your email to confirm your address, then sign in here.');
+					setAuthMode('login');
+					return;
+				}
+				await checkMembership(toAppUser(signUpData.user));
+				return;
 			}
-			await services.account.createEmailPasswordSession({ email, password });
-			await checkMembership(await services.account.get());
+			const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+			if (signInError) throw signInError;
+			await checkMembership(toAppUser(signInData.user));
 		} catch (authError) {
 			setError(getMessage(authError));
 		}
@@ -145,7 +205,8 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 
 	async function signOut() {
 		try {
-			await createAppwriteServices().account.deleteSession({ sessionId: 'current' });
+			const { error: signOutError } = await createSupabaseClient().auth.signOut();
+			if (signOutError) throw signOutError;
 			setUser(null);
 			setStatus('signedOut');
 		} catch (signOutError) {
@@ -166,12 +227,12 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 					<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
 					<div className="eyebrow">A little place for your people</div>
 					<h1>Your family stories<br />belong together.</h1>
-					<p className="setup-copy">Connect this app to your private Appwrite project to open your family album.</p>
+					<p className="setup-copy">Connect this app to your private Supabase project to open your family album.</p>
 					<div className="setup-instructions">
 						<strong>One quick setup step</strong>
-						<span>Copy <code>.env.example</code> to <code>.env</code> in this project folder, then fill in the Appwrite IDs.</span>
+						<span>Copy <code>.env.example</code> to <code>.env</code> in this project folder, then add your Supabase URL and publishable key.</span>
 					</div>
-					<a className="text-link" href="https://appwrite.io/docs" target="_blank" rel="noreferrer">Read the Appwrite setup guide <AppIcon name="arrow" size={16} /></a>
+					<a className="text-link" href="https://supabase.com/docs/guides/getting-started" target="_blank" rel="noreferrer">Read the Supabase setup guide <AppIcon name="arrow" size={16} /></a>
 				</div>
 			</main>
 		);
@@ -204,11 +265,12 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 							<label>Email address<input name="email" type="email" autoComplete="email" required placeholder="you@example.com" /></label>
 							<label>Password<input name="password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} minLength={8} required placeholder="At least 8 characters" /></label>
 							{error && <p className="form-error" role="alert">{error}</p>}
+							{authNotice && <p className="auth-notice" role="status">{authNotice}</p>}
 							<button className="button button-primary button-wide" type="submit">{authMode === 'login' ? 'Sign in to your album' : 'Create account'} <AppIcon name="arrow" size={17} /></button>
 						</form>
 						<p className="auth-switch">
 							{authMode === 'login' ? 'New to the family album?' : 'Already have an account?'}
-							<button type="button" onClick={() => { setError(''); setAuthMode(authMode === 'login' ? 'signup' : 'login'); }}>
+							<button type="button" onClick={() => { setError(''); setAuthNotice(''); setAuthMode(authMode === 'login' ? 'signup' : 'login'); }}>
 								{authMode === 'login' ? 'Create an account' : 'Sign in'}
 							</button>
 						</p>
@@ -226,7 +288,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 				<div className="pending-icon"><AppIcon name="lock" size={25} /></div>
 				<div className="eyebrow">Almost there</div>
 				<h1>You’re on the list.</h1>
-				<p className="muted">Your account is ready{user?.name ? `, ${user.name.split(' ')[0]}` : ''}. A family admin needs to add you to the Family team before you can see the album.</p>
+				<p className="muted">Your account is ready{user?.name ? `, ${user.name.split(' ')[0]}` : ''}. A family admin needs to approve you in Supabase before you can see the album.</p>
 				<button className="button button-quiet" onClick={signOut}><AppIcon name="logout" size={17} /> Sign out</button>
 			</main>
 		);
@@ -295,7 +357,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 									<span className="avatar avatar-large">{initials(selectedPerson.name)}</span>
 									<div><div className="eyebrow">A member of the family</div><h1>{selectedPerson.name}</h1><p className="muted">{selectedPerson.birthYear ? `Born ${selectedPerson.birthYear} · ` : ''}${taggedPhotos.length} {taggedPhotos.length === 1 ? 'memory' : 'memories'} together</p></div>
 								</div>
-								<PhotoGrid photos={taggedPhotos} profiles={profiles} photoUrl={photoUrl} onOpen={setSelectedPhoto} />
+								<PhotoGrid photos={taggedPhotos} profiles={profiles} onOpen={setSelectedPhoto} />
 							</>
 						) : <EmptyState title="We can’t find that family member" body="They may not have been added to the family tree yet." />}
 					</section>
@@ -313,13 +375,13 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 								<details className="person-filter"><summary><AppIcon name="search" size={16} /> {personFilter.length ? `${personFilter.length} people` : 'Everyone'} <span aria-hidden="true">⌄</span></summary><div className="filter-popover">{profiles.map((profile) => <label key={profile.$id}><input type="checkbox" checked={personFilter.includes(profile.$id)} onChange={() => setPersonFilter((current) => current.includes(profile.$id) ? current.filter((id) => id !== profile.$id) : [...current, profile.$id])} />{profile.name}</label>)}</div></details>
 							</div>
 						</div>
-						{filteredPhotos.length ? <PhotoGrid photos={filteredPhotos} profiles={profiles} photoUrl={photoUrl} onOpen={setSelectedPhoto} /> : <EmptyState title="The best memories are still to come" body="Add the first photo to start filling this family album." action={<button className="button button-primary" onClick={() => setShowUpload(true)}><AppIcon name="plus" size={17} /> Add a memory</button>} />}
+						{filteredPhotos.length ? <PhotoGrid photos={filteredPhotos} profiles={profiles} onOpen={setSelectedPhoto} /> : <EmptyState title="The best memories are still to come" body="Add the first photo to start filling this family album." action={<button className="button button-primary" onClick={() => setShowUpload(true)}><AppIcon name="plus" size={17} /> Add a memory</button>} />}
 					</section>
 				)}
 			</main>
 
 			{showUpload && <UploadDialog profiles={profiles} onClose={() => setShowUpload(false)} onCreated={async () => { await loadFamilyData(); setShowUpload(false); }} />}
-			{selectedPhoto && <PhotoDialog photo={selectedPhoto} profiles={profiles} user={user} photoUrl={photoUrl} onClose={() => setSelectedPhoto(null)} />}
+			{selectedPhoto && <PhotoDialog photo={selectedPhoto} profiles={profiles} user={user} onClose={() => setSelectedPhoto(null)} />}
 		</div>
 	);
 }
@@ -328,14 +390,14 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
 	return <div className="empty-state"><span className="empty-icon"><AppIcon name="image" size={24} /></span><h3>{title}</h3><p>{body}</p>{action}</div>;
 }
 
-function PhotoGrid({ photos, profiles, photoUrl, onOpen }: { photos: PhotoDocument[]; profiles: ProfileDocument[]; photoUrl: (id: string) => string; onOpen: (photo: PhotoDocument) => void }) {
+function PhotoGrid({ photos, profiles, onOpen }: { photos: PhotoDocument[]; profiles: ProfileDocument[]; onOpen: (photo: PhotoDocument) => void }) {
 	return (
 		<div className="photo-grid">
 			{photos.map((photo, index) => {
 				const tagged = profiles.filter((profile) => photo.taggedProfiles.includes(profile.$id));
 				return (
 					<button className={`photo-card card-tint-${index % 4}`} key={photo.$id} onClick={() => onOpen(photo)}>
-						<span className="photo-image-wrap"><img src={photoUrl(photo.fileId)} alt={photo.title || `Family memory from ${photo.year}`} loading="lazy" /><span className="photo-year">{photo.year}</span></span>
+						<span className="photo-image-wrap"><img src={photo.imageUrl} alt={photo.title || `Family memory from ${photo.year}`} loading="lazy" /><span className="photo-year">{photo.year}</span></span>
 						<span className="photo-card-content"><span className="photo-title">{photo.title || 'A moment together'}</span><span className="photo-tags">{tagged.length ? tagged.map((profile) => profile.name.split(' ')[0]).join(' · ') : 'A family memory'}</span></span>
 					</button>
 				);
@@ -380,15 +442,15 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 		const name = newProfileName.trim();
 		if (!name) return;
 		try {
-			const profile = await createAppwriteServices().databases.createDocument<ProfileDocument>(
-				appwriteConfig.databaseId,
-				appwriteConfig.profilesCollectionId,
-				ID.unique(),
-				{ name },
-				[Permission.read(Role.team(appwriteConfig.familyTeamId)), Permission.update(Role.team(appwriteConfig.familyTeamId)), Permission.delete(Role.team(appwriteConfig.familyTeamId))],
-			);
-			setSelectedIds((current) => [...current, profile.$id]);
-			setAvailableProfiles((current) => [...current, profile]);
+			const { data: profile, error: profileError } = await createSupabaseClient()
+				.from('profiles')
+				.insert({ name })
+				.select('*')
+				.single();
+			if (profileError) throw profileError;
+			const newProfile = toProfile(profile);
+			setSelectedIds((current) => [...current, newProfile.$id]);
+			setAvailableProfiles((current) => [...current, newProfile]);
 			setSearch('');
 			setCreatingProfile(false);
 			setNewProfileName('');
@@ -409,32 +471,65 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 			setSaving(false);
 			return;
 		}
-		let fileId = '';
+		if (!file.type.startsWith('image/')) {
+			setError('Choose an image file.');
+			setSaving(false);
+			return;
+		}
+		if (file.size > 50 * 1024 * 1024) {
+			setError('Choose an image smaller than 50 MiB.');
+			setSaving(false);
+			return;
+		}
+
+		const supabase = createSupabaseClient();
+		const extensionByType: Record<string, string> = {
+			'image/jpeg': 'jpg',
+			'image/png': 'png',
+			'image/webp': 'webp',
+			'image/gif': 'gif',
+			'image/avif': 'avif',
+		};
+		const extension = extensionByType[file.type];
+		if (!extension) {
+			setError('Choose a JPEG, PNG, WebP, GIF, or AVIF image.');
+			setSaving(false);
+			return;
+		}
+		const filePath = `${crypto.randomUUID()}.${extension}`;
+		let fileUploaded = false;
+		let photoSaved = false;
+
 		try {
-			const services = createAppwriteServices();
-			const uploaded = await services.storage.createFile(
-				appwriteConfig.storageBucketId,
-				ID.unique(),
-				file,
-				[Permission.read(Role.team(appwriteConfig.familyTeamId)), Permission.update(Role.team(appwriteConfig.familyTeamId)), Permission.delete(Role.team(appwriteConfig.familyTeamId))],
-			);
-			fileId = uploaded.$id;
-			await services.databases.createDocument<PhotoDocument>(
-				appwriteConfig.databaseId,
-				appwriteConfig.photosCollectionId,
-				ID.unique(),
-				{
-					title: String(data.get('title') ?? '').trim(),
-					fileId,
-					year: Number(data.get('year')),
-					uploadedBy: (await services.account.get()).$id,
-					taggedProfiles: selectedIds,
-				},
-				[Permission.read(Role.team(appwriteConfig.familyTeamId)), Permission.update(Role.team(appwriteConfig.familyTeamId)), Permission.delete(Role.team(appwriteConfig.familyTeamId))],
-			);
+			const { error: storageError } = await supabase.storage
+				.from(PHOTO_BUCKET)
+				.upload(filePath, file, { contentType: file.type, upsert: false });
+			if (storageError) throw storageError;
+			fileUploaded = true;
+
+			const { data: userData, error: userError } = await supabase.auth.getUser();
+			if (userError) throw userError;
+			if (!userData.user) throw new Error('Your session expired. Sign in again before uploading a photo.');
+
+			const { error: photoError } = await supabase.from('photos').insert({
+				title: String(data.get('title') ?? '').trim() || null,
+				file_path: filePath,
+				year: Number(data.get('year')),
+				uploaded_by: userData.user.id,
+				tagged_profiles: selectedIds,
+			});
+			if (photoError) throw photoError;
+			photoSaved = true;
 			await onCreated();
 		} catch (uploadError) {
-			setError(`${getMessage(uploadError)}${fileId ? ' The image uploaded, but its photo record could not be saved. Please remove the orphaned file in Appwrite Storage before retrying.' : ''}`);
+			let message = getMessage(uploadError);
+			if (fileUploaded && !photoSaved) {
+				const { error: cleanupError } = await supabase.storage.from(PHOTO_BUCKET).remove([filePath]);
+				if (cleanupError) {
+					message += ` The uploaded file could not be removed automatically (${cleanupError.message}); delete ${filePath} from Storage.`;
+				}
+			}
+			setError(message);
 			setSaving(false);
 		}
 	}
@@ -458,18 +553,35 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 	);
 }
 
-function PhotoDialog({ photo, profiles, user, photoUrl, onClose }: { photo: PhotoDocument; profiles: ProfileDocument[]; user: AppUser | null; photoUrl: (id: string) => string; onClose: () => void }) {
+function PhotoDialog({ photo, profiles, user, onClose }: { photo: PhotoDocument; profiles: ProfileDocument[]; user: AppUser | null; onClose: () => void }) {
 	const [comments, setComments] = useState<CommentDocument[]>([]);
 	const [error, setError] = useState('');
 	const [saving, setSaving] = useState(false);
 	const tagged = profiles.filter((profile) => photo.taggedProfiles.includes(profile.$id));
 
 	useEffect(() => {
-		createAppwriteServices().databases.listDocuments<CommentDocument>(
-			appwriteConfig.databaseId,
-			appwriteConfig.commentsCollectionId,
-			[Query.equal('photoId', photo.$id), Query.orderAsc('createdAt'), Query.limit(100)],
-		).then((result) => setComments(result.documents)).catch((commentError: unknown) => setError(getMessage(commentError)));
+		async function loadComments() {
+			try {
+				const { data, error: commentError } = await createSupabaseClient()
+					.from('comments')
+					.select('*')
+					.eq('photo_id', photo.$id)
+					.order('created_at')
+					.limit(100);
+				if (commentError) throw commentError;
+				setComments(data.map((comment) => ({
+					$id: comment.id,
+					photoId: comment.photo_id,
+					authorId: comment.author_id,
+					authorName: comment.author_name,
+					content: comment.content,
+					createdAt: comment.created_at,
+				})));
+			} catch (commentError) {
+				setError(getMessage(commentError));
+			}
+		}
+		void loadComments();
 	}, [photo.$id]);
 
 	async function submitComment(event: FormEvent<HTMLFormElement>) {
@@ -480,14 +592,14 @@ function PhotoDialog({ photo, profiles, user, photoUrl, onClose }: { photo: Phot
 		const form = event.currentTarget;
 		const data = new FormData(form);
 		try {
-			const comment = await createAppwriteServices().databases.createDocument<CommentDocument>(
-				appwriteConfig.databaseId,
-				appwriteConfig.commentsCollectionId,
-				ID.unique(),
-				{ photoId: photo.$id, authorId: user.$id, authorName: user.name || user.email, content: String(data.get('content') ?? '').trim(), createdAt: new Date().toISOString() },
-				[Permission.read(Role.team(appwriteConfig.familyTeamId)), Permission.update(Role.team(appwriteConfig.familyTeamId)), Permission.delete(Role.team(appwriteConfig.familyTeamId))],
-			);
-			setComments((current) => [...current, comment]);
+			const { data: comment, error: commentError } = await createSupabaseClient().from('comments').insert({
+				photo_id: photo.$id,
+				author_id: user.$id,
+				author_name: user.name || user.email,
+				content: String(data.get('content') ?? '').trim(),
+			}).select('*').single();
+			if (commentError) throw commentError;
+			setComments((current) => [...current, toComment(comment)]);
 			form.reset();
 		} catch (commentError) {
 			setError(getMessage(commentError));
@@ -500,7 +612,7 @@ function PhotoDialog({ photo, profiles, user, photoUrl, onClose }: { photo: Phot
 		<div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
 			<section className="modal-card photo-detail-modal" role="dialog" aria-modal="true" aria-label={photo.title || 'Family memory'}>
 				<button className="icon-button photo-close" onClick={onClose} aria-label="Close"><AppIcon name="close" /></button>
-				<img className="detail-image" src={photoUrl(photo.fileId)} alt={photo.title || `Family memory from ${photo.year}`} />
+				<img className="detail-image" src={photo.imageUrl} alt={photo.title || `Family memory from ${photo.year}`} />
 				<div className="detail-content"><div className="eyebrow">{photo.year} · SHARED WITH LOVE</div><h2>{photo.title || 'A moment together'}</h2><div className="detail-tags">{tagged.map((profile) => <a className="tag-chip" href={`/person/${profile.$id}`} key={profile.$id}>{profile.name}</a>)}</div>
 					<div className="comment-section"><h3>Little notes <span>{comments.length}</span></h3>{comments.map((comment) => <div className="comment-row" key={comment.$id}><span className="avatar avatar-small">{initials(comment.authorName)}</span><p><b>{comment.authorName}</b><span>{comment.content}</span></p></div>)}{!comments.length && !error && <p className="muted comment-empty">No notes yet. Leave the first one.</p>}{error && <p className="form-error" role="alert">{error}</p>}
 						<form className="comment-form" onSubmit={submitComment}><input name="content" maxLength={2000} required placeholder="Leave a little note…" aria-label="Write a comment" /><button type="submit" disabled={saving} aria-label="Send comment"><AppIcon name="arrow" size={17} /></button></form>
