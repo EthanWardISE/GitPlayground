@@ -24,9 +24,9 @@ Open the local URL Astro prints, normally `http://localhost:4321`. The home page
 4. In **Project Settings → API Keys** (or the project’s **Connect** dialog), copy the **Project URL** and the **publishable key** (`sb_publishable_...`). Do not use a secret key (`sb_secret_...`) or legacy `service_role` key in the website.
 5. Open **Authentication → URL Configuration**. Set the local **Site URL** to `http://localhost:4321` and add `http://localhost:4321/**` to the allowed **Redirect URLs**. Email confirmation sends the user back to the address passed by the app, and Supabase only redirects to URLs you allow.
 
-### 2. Replace the example `.env`
+### 2. Create your local `.env`
 
-The old `.env` was removed as requested. Copy the new example file and put your actual project values into it:
+Copy the example file and put your actual project values into it:
 
 ```powershell
 Copy-Item .env.example .env
@@ -101,9 +101,9 @@ npm run build
 npm start
 ```
 
-The production server uses Astro’s standalone Node adapter and listens on `PORT` (default `4321`) and `HOST` (default `0.0.0.0`). The current code reads public Supabase configuration in the browser. Provide `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the deployment environment at build time and redeploy if they change.
+The production server uses Astro’s standalone Node adapter and listens on `PORT` (default `4321`) and `HOST` (default `0.0.0.0`). The current code reads public Supabase configuration in the browser. For the GitHub Actions ECR workflow, add `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` as repository Actions secrets; the workflow passes them to the Docker build, where Astro embeds them in the app. These are public project values, not secret credentials, and must not be replaced with a Supabase secret/service-role key. Rebuild if they change.
 
-For AWS App Runner, use Node.js 22+, build with `npm ci && npm run build`, start with `npm start`, and set the service port/environment `PORT` to `8080`. Connect the deployed site’s HTTPS domain in Supabase under **Authentication → URL Configuration → Redirect URLs** (and Site URL) before relying on email confirmation links. Supabase hosts the backend; this AWS service only hosts the Astro app.
+For an AWS App Runner source build, use Node.js 22+, provide both `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` to the build environment, build with `npm ci && npm run build`, start with `npm start`, and set the service port/environment `PORT` to `8080`. Connect the deployed site’s HTTPS domain in Supabase under **Authentication → URL Configuration → Redirect URLs** (and Site URL) before relying on email confirmation links. Supabase hosts the backend; this AWS service only hosts the Astro app.
 
 ## Project structure
 
