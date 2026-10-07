@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL Astro prints, normally `http://localhost:4321`. The home page shows a setup screen until the two Supabase values in `.env` have been filled in.
+Open the local URL Astro prints, normally `http://localhost:4321`. The sign-in page appears even if Supabase is not configured; submitting sign-in or sign-up without the required values displays a configuration error.
 
 ## Create and configure your Supabase project
 
