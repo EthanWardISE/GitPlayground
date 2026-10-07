@@ -140,19 +140,31 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 			return;
 		}
 
-		createSupabaseClient().auth.getUser()
-			.then(async ({ data, error: authError }) => {
+		async function restoreSession() {
+			try {
+				const supabase = createSupabaseClient();
+				const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+				if (sessionError) throw sessionError;
+				if (!sessionData.session) {
+					setError('');
+					setStatus('signedOut');
+					return;
+				}
+
+				const { data, error: authError } = await supabase.auth.getUser();
 				if (authError) throw authError;
 				if (!data.user) {
+					setError('');
 					setStatus('signedOut');
 					return;
 				}
 				await checkMembership(toAppUser(data.user));
-			})
-			.catch((authError: unknown) => {
+			} catch (authError) {
 				setError(getMessage(authError));
 				setStatus('error');
-			});
+			}
+		}
+		void restoreSession();
 	}, [checkMembership, configReady]);
 
 	const years = useMemo(
