@@ -17,11 +17,17 @@ let browserClient: ReturnType<typeof createBrowserClient<Database>> | undefined;
 
 export function createSupabaseClient() {
     if (!supabaseConfigured) {
-        throw new Error('Supabase is not configured. Environment keys are missing.');
+        console.error('Supabase configuration missing: URL or Key is empty.');
+        throw new Error('Supabase is not configured.');
     }
 
-    browserClient ??= createBrowserClient<Database>(supabaseUrl, supabasePublishableKey);
-    return browserClient;
+    try {
+        browserClient ??= createBrowserClient<Database>(supabaseUrl, supabasePublishableKey);
+        return browserClient;
+    } catch (err) {
+        console.error('Failed to create Supabase client instance:', err);
+        throw err;
+    }
 }
 
 export const PHOTO_BUCKET = 'family-photos';
