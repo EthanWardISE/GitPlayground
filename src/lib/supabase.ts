@@ -10,7 +10,7 @@ let browserClient: ReturnType<typeof createBrowserClient<Database>> | undefined;
 
 export function createSupabaseClient() {
 	if (!supabaseConfigured) {
-		throw new Error('Supabase is not configured. Set PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_PUBLISHABLE_KEY, then rebuild and redeploy the app.');
+		throw new Error('Supabase is not configured. Copy .env.example to .env and add your project URL and publishable key.');
 	}
 
 	browserClient ??= createBrowserClient<Database>(supabaseUrl, supabasePublishableKey);
