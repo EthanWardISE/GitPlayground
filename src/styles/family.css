@@ -38,16 +38,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .text-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--green-dark); cursor: pointer; font-size: 13px; font-weight: 700; }
 .form-error { margin: 0; color: #a84435; font-size: 13px; }
 
-.setup-screen, .auth-screen { min-height: 100vh; }
-.setup-screen { display: grid; min-height: 100vh; place-items: center; padding: 28px; background: #f3f2ea; }
-.setup-card { width: min(560px, 100%); padding: 54px 58px; border: 1px solid #eeece4; border-radius: 22px; background: #fffefa; box-shadow: 0 18px 60px #3433230d; }
-.setup-card .eyebrow { margin-top: 46px; }
-.setup-card h1, .auth-story h1 { margin: 12px 0 16px; font-family: var(--serif); font-size: clamp(43px, 5vw, 60px); font-weight: 400; letter-spacing: -2.5px; line-height: 1.06; }
-.setup-copy { max-width: 390px; color: #76746c; font-size: 15px; line-height: 1.8; }
-.setup-instructions { display: grid; gap: 7px; margin: 27px 0 20px; padding: 17px 18px; border-radius: 10px; background: #f5f5ef; color: #626157; font-size: 13px; }
-.setup-instructions strong { color: var(--ink); }
-.setup-instructions code { padding: 2px 5px; border-radius: 4px; background: #e8e9e0; color: #394f3e; }
-
+.auth-screen { min-height: 100vh; }
+.auth-story h1 { margin: 12px 0 16px; font-family: var(--serif); font-size: clamp(43px, 5vw, 60px); font-weight: 400; letter-spacing: -2.5px; line-height: 1.06; }
 .auth-screen { display: grid; grid-template-columns: minmax(390px, .95fr) 1.05fr; min-height: 100vh; background: #fffefa; }
 .auth-story { position: relative; display: flex; min-height: 100vh; flex-direction: column; overflow: hidden; padding: 36px clamp(36px, 6vw, 92px); background: #667f62; color: #fffdf6; }
 .brand-light { color: white; }
