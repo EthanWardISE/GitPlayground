@@ -3,7 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import { createSupabaseClient, PHOTO_BUCKET, supabaseConfigured } from '../lib/supabase';
 import type { CommentDocument, CommentRow, PhotoDocument, ProfileDocument, ProfileRow } from '../types/database';
 
-type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'error';
+type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'setup' | 'error';
 interface AppUser {
 	$id: string;
 	name: string;
@@ -136,7 +136,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 
 	useEffect(() => {
 		if (!configReady) {
-			setStatus('signedOut');
+			setStatus('setup');
 			return;
 		}
 
@@ -230,6 +230,24 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 
 	if (status === 'loading') {
 		return <main className="screen-state"><div className="loading-mark">k</div><p>Gathering your family memories…</p></main>;
+	}
+
+	if (status === 'setup') {
+		return (
+			<main className="setup-screen">
+				<div className="setup-card">
+					<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
+					<div className="eyebrow">A little place for your people</div>
+					<h1>Your family stories<br />belong together.</h1>
+					<p className="setup-copy">Connect this app to your private Supabase project to open your family album.</p>
+					<div className="setup-instructions">
+						<strong>One quick setup step</strong>
+						<span>Copy <code>.env.example</code> to <code>.env</code> in this project folder, then add your Supabase URL and publishable key.</span>
+					</div>
+					<a className="text-link" href="https://supabase.com/docs/guides/getting-started" target="_blank" rel="noreferrer">Read the Supabase setup guide <AppIcon name="arrow" size={16} /></a>
+				</div>
+			</main>
+		);
 	}
 
 	if (status === 'signedOut') {
