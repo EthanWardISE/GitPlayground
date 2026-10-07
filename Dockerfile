@@ -13,14 +13,18 @@ ENV PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLIC_SUPABASE_PUBLISHABLE_KEY
 RUN npm run build
 
 # Stage 2: Run the app
+# Stage 2: Run the app
 FROM node:22-alpine AS runner
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --production
 COPY --from=builder /app/dist ./dist
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
 ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
 
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["node", "./dist/server/entry.mjs"]
