@@ -1,0 +1,19 @@
+---
+import FamilyApp from '../../components/FamilyApp';
+import '../../styles/family.css';
+
+const { id } = Astro.params;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="description" content="Family member profile and shared memories." />
+		<title>Family member — Kinfolk</title>
+	</head>
+	<body>
+		<FamilyApp client:load view="person" personId={id} />
+	</body>
+</html>

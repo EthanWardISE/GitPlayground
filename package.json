@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "start": "node ./dist/server/entry.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "astro": "astro"
@@ -15,10 +16,15 @@
   "dependencies": {
     "@astrojs/check": "^0.9.10",
     "@astrojs/mdx": "^8.0.1",
+    "@astrojs/node": "^11.1.7",
+    "@astrojs/react": "^7.0.1",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.4",
+    "@tailwindcss/vite": "^4.3.3",
+    "appwrite": "^28.1.0",
     "astro": "^7.3.2",
     "sharp": "^0.35.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },
   "allowScripts": {
