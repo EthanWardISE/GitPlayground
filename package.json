@@ -24,6 +24,7 @@
     "@supabase/supabase-js": "^2.117.2",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.8",
+    "astro-aws-amplify": "^0.6.0",
     "sharp": "^0.35.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"

@@ -1,20 +1,24 @@
+```js
 // @ts-check
 
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import { defineConfig, fontProviders } from 'astro/config';
-import node from '@astrojs/node';
+import awsAmplify from 'astro-aws-amplify';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-	site: 'https://example.com',
+	site: 'https://main.d3cvpy1f41c3hp.amplifyapp.com',
 	output: 'server',
-	adapter: node({ mode: 'standalone' }),
+	adapter: awsAmplify(),
+
 	integrations: [mdx(), sitemap(), react()],
+
 	vite: {
 		plugins: [tailwindcss()],
 	},
+
 	fonts: [
 		{
 			provider: fontProviders.local(),
@@ -40,3 +44,4 @@ export default defineConfig({
 		},
 	],
 });
+```
