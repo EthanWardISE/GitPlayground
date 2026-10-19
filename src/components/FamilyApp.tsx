@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { createSupabaseClient, PHOTO_BUCKET, supabaseConfigured } from '../lib/supabase';
+import { configureSupabaseClient, createSupabaseClient, PHOTO_BUCKET } from '../lib/supabase';
 import type { CommentDocument, CommentRow, PhotoDocument, ProfileDocument, ProfileRow } from '../types/database';
 
 type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'setup' | 'error';
@@ -89,8 +89,6 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 	const [showUpload, setShowUpload] = useState(false);
 	const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
-	const configReady = supabaseConfigured;
-
 	const loadFamilyData = useCallback(async () => {
 		const supabase = createSupabaseClient();
 		const [profileResult, photoResult] = await Promise.all([
@@ -135,13 +133,26 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 	}, [loadFamilyData]);
 
 	useEffect(() => {
-		if (!configReady) {
-			setStatus('setup');
-			return;
-		}
-
 		async function restoreSession() {
 			try {
+				const configResponse = await fetch('/api/runtime-config', { cache: 'no-store' });
+				const config = await configResponse.json() as {
+					configured?: boolean;
+					url?: string;
+					publishableKey?: string;
+				};
+				if (configResponse.status === 503 && config.configured === false) {
+					setStatus('setup');
+					return;
+				}
+				if (!configResponse.ok) {
+					throw new Error(`Could not load app configuration (HTTP ${configResponse.status}).`);
+				}
+				if (!config.url || !config.publishableKey) {
+					throw new Error('The app configuration response is missing the Supabase URL or publishable key.');
+				}
+				configureSupabaseClient({ url: config.url, publishableKey: config.publishableKey });
+
 				const supabase = createSupabaseClient();
 				const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 				if (sessionError) throw sessionError;
@@ -165,7 +176,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 			}
 		}
 		void restoreSession();
-	}, [checkMembership, configReady]);
+	}, [checkMembership]);
 
 	const years = useMemo(
 		() => [...new Set(photos.map((photo) => photo.year))].sort((a, b) => b - a),
@@ -242,7 +253,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 					<p className="setup-copy">Connect this app to your private Supabase project to open your family album.</p>
 					<div className="setup-instructions">
 						<strong>One quick setup step</strong>
-						<span>Copy <code>.env.example</code> to <code>.env</code> in this project folder, then add your Supabase URL and publishable key.</span>
+						<span>Set <code>PUBLIC_SUPABASE_URL</code> and <code>PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> in this app's runtime environment.</span>
 					</div>
 					<a className="text-link" href="https://supabase.com/docs/guides/getting-started" target="_blank" rel="noreferrer">Read the Supabase setup guide <AppIcon name="arrow" size={16} /></a>
 				</div>

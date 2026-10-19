@@ -3,14 +3,14 @@
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import { defineConfig, fontProviders } from 'astro/config';
-import awsAmplify from 'astro-aws-amplify';
+import node from '@astrojs/node';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-	site: 'https://main.d3cvpy1f41c3hp.amplifyapp.com',
+	site: process.env.SITE_URL || 'http://localhost:4321',
 	output: 'server',
-	adapter: awsAmplify(),
+	adapter: node({ mode: 'standalone' }),
 
 	integrations: [mdx(), sitemap(), react()],
 

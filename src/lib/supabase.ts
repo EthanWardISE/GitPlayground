@@ -1,22 +1,18 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '../types/database';
 
-const supabaseUrl = 
-    import.meta.env.PUBLIC_SUPABASE_URL || 
-    (import.meta.env.SSR ? process.env.PUBLIC_SUPABASE_URL : undefined) || 
-    '';
-
-const supabasePublishableKey = 
-    import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
-    (import.meta.env.SSR ? process.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY : undefined) || 
-    '';
-
-export const supabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
-
+let supabaseUrl = '';
+let supabasePublishableKey = '';
 let browserClient: ReturnType<typeof createBrowserClient<Database>> | undefined;
 
+export function configureSupabaseClient(config: { url: string; publishableKey: string }) {
+    supabaseUrl = config.url;
+    supabasePublishableKey = config.publishableKey;
+    browserClient = undefined;
+}
+
 export function createSupabaseClient() {
-    if (!supabaseConfigured) {
+    if (!supabaseUrl || !supabasePublishableKey) {
         console.error('Supabase configuration missing: URL or Key is empty.');
         throw new Error('Supabase is not configured.');
     }

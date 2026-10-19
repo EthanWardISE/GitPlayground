@@ -1,42 +1,139 @@
-name: Build and Push to AWS ECR
+name: Deploy Kinfolk to ECS
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: kinfolk-ecs-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+      SITE_URL: ${{ vars.SITE_URL }}
+
     steps:
-      - name: Checkout code
+      - name: Check out the app
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1 # Change this to your preferred AWS region (e.g., eu-west-1)
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Check deployment settings
         env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: kinfolk-family-app
-          IMAGE_TAG: latest
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
           PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
           PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          if [ -z "$PUBLIC_SUPABASE_URL" ] || [ -z "$PUBLIC_SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "::error::Set PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_PUBLISHABLE_KEY as repository Actions secrets."
+          set -euo pipefail
+          for name in AWS_REGION AWS_ROLE_TO_ASSUME ECR_REPOSITORY ECS_CLUSTER ECS_SERVICE ECS_CONTAINER_NAME SITE_URL PUBLIC_SUPABASE_URL PUBLIC_SUPABASE_PUBLISHABLE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Configure the GitHub Actions variable or secret named $name."
+              exit 1
+            fi
+          done
+
+      - name: Configure AWS access with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Sign in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the app image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          IMAGE_URI="$REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
+          docker build --pull \
+            --build-arg SITE_URL="$SITE_URL" \
+            --tag "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Register a task definition with runtime configuration
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          CURRENT_TASK_DEFINITION="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+          if [ -z "$CURRENT_TASK_DEFINITION" ] || [ "$CURRENT_TASK_DEFINITION" = "None" ]; then
+            echo "::error::ECS service $ECS_SERVICE was not found in cluster $ECS_CLUSTER."
             exit 1
           fi
 
-          docker build \
-            --build-arg PUBLIC_SUPABASE_URL="$PUBLIC_SUPABASE_URL" \
-            --build-arg PUBLIC_SUPABASE_PUBLISHABLE_KEY="$PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
-            -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          aws ecs describe-task-definition \
+            --task-definition "$CURRENT_TASK_DEFINITION" \
+            --query taskDefinition \
+            --output json |
+            jq --arg name "$ECS_CONTAINER_NAME" \
+              --arg image "$IMAGE_URI" \
+              --arg url "$PUBLIC_SUPABASE_URL" \
+              --arg key "$PUBLIC_SUPABASE_PUBLISHABLE_KEY" '
+                del(
+                  .taskDefinitionArn,
+                  .revision,
+                  .status,
+                  .requiresAttributes,
+                  .compatibilities,
+                  .registeredAt,
+                  .registeredBy
+                )
+                | if any(.containerDefinitions[]; .name == $name) then .
+                  else error("Container name does not exist in the ECS task definition")
+                  end
+                | .containerDefinitions |= map(
+                    if .name == $name then
+                      .image = $image
+                      | .environment = (
+                          ((.environment // [])
+                            | map(select(
+                                .name != "PUBLIC_SUPABASE_URL"
+                                and .name != "PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+                                and .name != "PORT"
+                              )))
+                          + [
+                              {name: "PUBLIC_SUPABASE_URL", value: $url},
+                              {name: "PUBLIC_SUPABASE_PUBLISHABLE_KEY", value: $key},
+                              {name: "PORT", value: "80"}
+                            ]
+                        )
+                    else . end
+                  )
+              ' > task-definition.json
+
+          TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> "$GITHUB_ENV"
+
+      - name: Update the ECS service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$TASK_DEFINITION_ARN" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"

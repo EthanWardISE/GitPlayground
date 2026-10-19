@@ -91,9 +91,170 @@ Only add people you trust: a family member can see the album and its photos. `fa
 
 The database names use snake_case: for example, a photo record stores `file_path`, `uploaded_by`, and `tagged_profiles`. Photos are private Storage objects in `family-photos`; the `file_path` in `photos` is the object path, not a public URL.
 
-## Build and deploy
+## Launch on Amazon ECS
 
-Check and build from the project folder:
+This project runs as a Node.js server in an Amazon ECS Fargate container. GitHub Actions builds the container, pushes it to Amazon ECR, and tells ECS to start it. Supabase settings are added to the **ECS task definition when GitHub Actions deploys**. They are not baked into the image and are not read from a file inside the container.
+
+The Supabase URL and publishable key are designed to be public in a website. Use only the Supabase **publishable** key (`sb_publishable_...`), never a `sb_secret_...` or `service_role` key. The app sends the two public values to the browser through `/api/runtime-config`; that endpoint is not cached.
+
+**AWS charges for the running Fargate task and load balancer.** Check current prices for your region and delete the ECS service, load balancer, and other resources when you no longer need them.
+
+### Part A — Make an empty place for the app in AWS
+
+Use one AWS region for every step. These instructions use `eu-north-1`; choose another region if you prefer, but use it everywhere, including GitHub.
+
+1. **Make an ECR image repository.**
+   - Open **Amazon ECR → Private registry → Repositories → Create repository**.
+   - Choose **Private**, enter `kinfolk-family-app`, and create it.
+   - ECR is the shelf where GitHub will put the app’s container image.
+
+2. **Make an ECS cluster.**
+   - Open **Amazon ECS → Clusters → Create cluster**.
+   - Name it `kinfolk-cluster`, select the AWS Fargate/serverless option, and create it.
+
+3. **Make a temporary task definition.**
+   - In **Task definitions → Create new task definition**, choose **Fargate**, Linux, and `x86_64`.
+   - Name the task family `kinfolk-task`. Choose `0.5 vCPU` and `1 GB` memory.
+   - For the **task execution role**, create or select `ecsTaskExecutionRole`. It needs the AWS-managed `AmazonECSTaskExecutionRolePolicy` so ECS can download images and write logs. The app does not need a task role.
+   - Add one container. Set its name to `kinfolk`, its image to `public.ecr.aws/docker/library/nginx:alpine`, and its container port to `80` using TCP. Turn on the `awslogs` log option if the wizard offers it.
+   - Save the task definition. Nginx is only a temporary starter image; the first GitHub deployment replaces it with Kinfolk.
+
+4. **Make the ECS service and its web address.**
+   - Open `kinfolk-cluster` and choose **Create service**. Use the Fargate launch type, task family `kinfolk-task`, service name `kinfolk-service`, and desired task count `1`.
+   - In the networking section, choose a VPC with public subnets. Turn on **Auto-assign public IP** so the first task can download its image.
+   - In load balancing, create an **internet-facing Application Load Balancer** with an HTTP listener on port `80`. Forward it to the `kinfolk` container on port `80`, and create a target group that uses **IP** targets and checks the path `/`.
+   - Let the wizard create security groups if you are not sure what to choose. The load balancer must accept web traffic on port `80`; the task should accept port `80` from the load balancer.
+   - Create the service and wait until its temporary Nginx page is healthy. Copy the load balancer’s **DNS name** from **EC2 → Load Balancers**. It is the temporary web address for Kinfolk too; write it as `http://<DNS-name>` (include `http://`).
+
+### Part B — Let GitHub deploy safely
+
+GitHub uses AWS **OpenID Connect (OIDC)**. This lets GitHub request short-lived AWS access when a deployment runs; you do not need to save permanent AWS access keys in GitHub.
+
+5. **Create the AWS GitHub identity provider (once per AWS account).**
+   - Open **IAM → Identity providers → Add provider**.
+   - Provider type: **OpenID Connect**. Provider URL: `https://token.actions.githubusercontent.com`. Audience: `sts.amazonaws.com`.
+
+6. **Create a role for this repository’s GitHub workflow.**
+   - In **IAM → Roles → Create role**, choose **Web identity**, select the provider you just added, and choose audience `sts.amazonaws.com`.
+   - Restrict the role to your repository and the `main` branch. The trust relationship should look like this; replace `YOUR-OWNER` and `YOUR-REPOSITORY` with the GitHub owner and repository name:
+
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [{
+         "Effect": "Allow",
+         "Principal": {
+           "Federated": "arn:aws:iam::YOUR-ACCOUNT-ID:oidc-provider/token.actions.githubusercontent.com"
+         },
+         "Action": "sts:AssumeRoleWithWebIdentity",
+         "Condition": {
+           "StringEquals": {
+             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+             "token.actions.githubusercontent.com:sub": "repo:YOUR-OWNER/YOUR-REPOSITORY:ref:refs/heads/main"
+           }
+         }
+       }]
+     }
+     ```
+
+   - Attach an inline permissions policy like this. Replace the account ID and region. If the ECS wizard gave the task execution role a different name, use that role’s ARN on the `iam:PassRole` line.
+
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": "ecr:GetAuthorizationToken",
+           "Resource": "*"
+         },
+         {
+           "Effect": "Allow",
+           "Action": [
+             "ecr:BatchCheckLayerAvailability",
+             "ecr:CompleteLayerUpload",
+             "ecr:InitiateLayerUpload",
+             "ecr:PutImage",
+             "ecr:UploadLayerPart"
+           ],
+           "Resource": "arn:aws:ecr:YOUR-REGION:YOUR-ACCOUNT-ID:repository/kinfolk-family-app"
+         },
+         {
+           "Effect": "Allow",
+           "Action": [
+             "ecs:DescribeServices",
+             "ecs:DescribeTaskDefinition"
+           ],
+           "Resource": "*"
+         },
+         {
+           "Effect": "Allow",
+           "Action": [
+             "ecs:RegisterTaskDefinition"
+           ],
+           "Resource": "*"
+         },
+         {
+           "Effect": "Allow",
+           "Action": "ecs:UpdateService",
+           "Resource": "arn:aws:ecs:YOUR-REGION:YOUR-ACCOUNT-ID:service/kinfolk-cluster/kinfolk-service"
+         },
+         {
+           "Effect": "Allow",
+           "Action": "iam:PassRole",
+           "Resource": "arn:aws:iam::YOUR-ACCOUNT-ID:role/ecsTaskExecutionRole",
+           "Condition": {
+             "StringEquals": {
+               "iam:PassedToService": "ecs-tasks.amazonaws.com"
+             }
+           }
+         }
+       ]
+     }
+     ```
+
+   - Save the role and copy its ARN. The GitHub workflow uses this role to push an image and update this one ECS service.
+
+7. **Give the GitHub repository its settings.**
+   - In GitHub, open the repository’s **Settings → Secrets and variables → Actions**.
+   - Add these **variables**:
+
+     | Variable | Value |
+     | --- | --- |
+     | `AWS_REGION` | The region from Part A, for example `eu-north-1` |
+     | `AWS_ROLE_TO_ASSUME` | The full ARN of the IAM role from step 6 |
+     | `ECR_REPOSITORY` | `kinfolk-family-app` |
+     | `ECS_CLUSTER` | `kinfolk-cluster` |
+     | `ECS_SERVICE` | `kinfolk-service` |
+     | `ECS_CONTAINER_NAME` | `kinfolk` |
+     | `SITE_URL` | The load balancer address from step 4, starting with `http://` |
+
+   - Add these **secrets**:
+
+     | Secret | Value |
+     | --- | --- |
+     | `PUBLIC_SUPABASE_URL` | Your Supabase Project URL, such as `https://example.supabase.co` |
+     | `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Your Supabase publishable key beginning `sb_publishable_` |
+
+   - The last two are public website settings, not Supabase admin passwords. The workflow copies them into the ECS task definition as runtime environment variables and starts a new task. It deliberately does **not** pass them to `docker build`. Each future deployment repeats this update, so the running task gets the current GitHub secret values.
+
+8. **Launch Kinfolk.**
+   - Make sure your changes are pushed to the repository’s `main` branch. Or open **Actions → Deploy Kinfolk to ECS → Run workflow** and select `main`.
+   - The workflow builds and uploads the image, registers a new ECS task definition containing the two Supabase settings, and updates the ECS service.
+   - Wait for the workflow to turn green. Open the load balancer address from step 4. The temporary Nginx page should now be Kinfolk.
+   - If the workflow is red, open it and read the failed step. A missing setting usually means a GitHub variable or secret name was typed differently. An `AccessDenied` message usually means the role policy or its repository/branch trust condition does not match.
+
+9. **Tell Supabase about the new address.**
+   - In Supabase, open **Authentication → URL Configuration**.
+   - Set the Site URL to your app address and add that address plus `/**` to the Redirect URLs. For the temporary load balancer address, use the same `http://...` address you put in `SITE_URL`.
+   - For family use, attach your own domain and HTTPS certificate to the load balancer. Then change `SITE_URL` and the Supabase Site URL/Redirect URLs to the `https://` domain and run a new deployment.
+   - Create your login and approve your first family admin using the earlier Supabase steps in this README.
+
+**Important:** Do not upload `.env` to AWS, commit it, or expect it to be copied into the container. The Docker build excludes `.env`; ECS environment variables are created by the GitHub deployment workflow. The two Supabase values must exist as GitHub Actions secrets for each deployment. They are public client settings; never substitute a Supabase secret/service-role key.
+
+### Check locally
+
+From the `puffy-parsec` project folder:
 
 ```powershell
 npm run check
@@ -101,9 +262,7 @@ npm run build
 npm start
 ```
 
-The production server uses Astro’s standalone Node adapter and listens on `PORT` (default `4321`) and `HOST` (default `0.0.0.0`). The current code reads public Supabase configuration in the browser. For the GitHub Actions ECR workflow, add `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` as repository Actions secrets; the workflow passes them to the Docker build, where Astro embeds them in the app. These are public project values, not secret credentials, and must not be replaced with a Supabase secret/service-role key. Rebuild if they change.
-
-For an AWS App Runner source build, use Node.js 22+, provide both `PUBLIC_SUPABASE_URL` and `PUBLIC_SUPABASE_PUBLISHABLE_KEY` to the build environment, build with `npm ci && npm run build`, start with `npm start`, and set the service port/environment `PORT` to `8080`. Connect the deployed site’s HTTPS domain in Supabase under **Authentication → URL Configuration → Redirect URLs** (and Site URL) before relying on email confirmation links. Supabase hosts the backend; this AWS service only hosts the Astro app.
+For local development, `npm run dev` reads the two values from your ignored `.env` file. The production image uses Astro’s standalone Node adapter, listens on `0.0.0.0`, and uses port `80` in ECS. The task definition and load balancer must both use the same port.
 
 ## Project structure
 
