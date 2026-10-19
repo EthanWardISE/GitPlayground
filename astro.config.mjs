@@ -1,4 +1,3 @@
-```js
 // @ts-check
 
 import mdx from '@astrojs/mdx';
@@ -44,4 +43,3 @@ export default defineConfig({
 		},
 	],
 });
-```
