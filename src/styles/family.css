@@ -35,6 +35,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button-small { min-height: 38px; padding: 0 13px; }
 .button-wide { width: 100%; min-height: 48px; margin-top: 3px; }
 .button-quiet { border-color: #e8e6df; background: transparent; }
+.button-danger { border-color: #edd8d3; background: #fff8f6; color: #a84435; }
+.button-danger:hover:not(:disabled) { background: #fdf0ed; }
 .text-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--green-dark); cursor: pointer; font-size: 13px; font-weight: 700; }
 .form-error { margin: 0; color: #a84435; font-size: 13px; }
 
@@ -209,6 +211,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .photo-detail-modal { display: grid; width: min(900px, 100%); grid-template-columns: 1.1fr .9fr; max-height: 85vh; overflow: hidden; }
 .detail-image { width: 100%; height: 100%; min-height: 480px; object-fit: cover; background: #ebe8dd; }
 .detail-content { display: flex; min-height: 0; flex-direction: column; overflow: auto; padding: 28px 24px; }
+.detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.detail-heading .button { flex: 0 0 auto; }
 .detail-content h2 { margin: 7px 0 14px; font-family: var(--serif); font-size: 25px; font-weight: 400; }
 .detail-tags .tag-chip { cursor: pointer; }
 .photo-close { position: absolute; z-index: 1; top: 13px; right: 13px; box-shadow: 0 2px 8px #0002; }

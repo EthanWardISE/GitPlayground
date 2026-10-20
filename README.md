@@ -47,9 +47,10 @@ Use the exact URL and publishable key shown in your Supabase project. These vari
 1. In the Supabase Dashboard, open **SQL Editor → New query**.
 2. In this project, open `supabase/migrations/20261007000000_family_album.sql` in your editor and copy all of it.
 3. Paste it into the Supabase SQL Editor and choose **Run**.
-4. Check the SQL Editor result for a success message. The script creates four tables, indexes, a private `family-photos` bucket with a 50 MiB per-file limit, and RLS policies. You do not need to create tables or a bucket manually.
+4. Repeat with `supabase/migrations/20261020000000_owner_photo_deletion.sql` to apply photo ownership and deletion policies.
+5. Check the SQL Editor result for a success message. The scripts create four tables, indexes, a private `family-photos` bucket with a 50 MiB per-file limit, and RLS policies. You do not need to create tables or a bucket manually.
 
-The script is for a fresh project. It restricts data access to authenticated users who have an entry in `family_members`. Storage is private: the app creates time-limited signed links for the photo grid rather than making family photos public.
+The first script is for a fresh project; run the second script afterward to enforce owner-only photo edits and deletion, including on an existing project. Data access is restricted to authenticated users who have an entry in `family_members`. Storage is private: the app creates time-limited signed links for the photo grid rather than making family photos public.
 
 ### 4. Start the app and create your login
 
@@ -85,7 +86,7 @@ Only add people you trust: a family member can see the album and its photos. `fa
 
 - **Add a memory:** upload an image, choose a year, and tag family profiles. If a tagged person has not been added before, create their profile directly from the tagging form.
 - **Filter memories:** use the year dropdown and people filter.
-- **Open a photo:** select a card to read and add comments.
+- **Open a photo:** select a card to read and add comments. Delete posts you uploaded from the photo detail view; Kinfolk asks for confirmation first.
 - **Explore the family tree:** open `/tree`. Add parent IDs to profile rows in the Supabase **Table Editor → profiles** table to connect people.
 - **Open a person:** select a name in the tree or family list to see photos tagged with that person at `/person/<profile-id>`.
 
