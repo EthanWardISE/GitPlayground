@@ -48,9 +48,27 @@ Use the exact URL and publishable key shown in your Supabase project. These vari
 2. In this project, open `supabase/migrations/20261007000000_family_album.sql` in your editor and copy all of it.
 3. Paste it into the Supabase SQL Editor and choose **Run**.
 4. Repeat with `supabase/migrations/20261020000000_owner_photo_deletion.sql` to apply photo ownership and deletion policies.
-5. Check the SQL Editor result for a success message. The scripts create four tables, indexes, a private `family-photos` bucket with a 50 MiB per-file limit, and RLS policies. You do not need to create tables or a bucket manually.
+5. Repeat with `supabase/migrations/20261021000000_people_tree_collections.sql` to add approved profile claims, flexible family relationships, saved tree layouts, and collaborative photobooks.
+6. Repeat with `supabase/migrations/20261022000000_standalone_profile_avatars.sql` to allow profile pictures to be uploaded separately from album photos.
+7. Repeat with `supabase/migrations/20261023000000_profile_avatar_storage_read.sql` to allow family members to display uploaded profile pictures.
+8. Repeat with `supabase/migrations/20261024000000_profile_and_photobook_management.sql` to enable authorized picture removal.
+9. Repeat with `supabase/migrations/20261025000000_profile_bios.sql` to enable bios on claimed profiles.
+10. Repeat with `supabase/migrations/20261026000000_relationship_handle_positions.sql` so family connections remain attached to the exact tree handles used to create them.
+11. Check the SQL Editor result for a success message. The scripts create tables, indexes, a private `family-photos` bucket with a 50 MiB per-file limit, and RLS policies. You do not need to create tables or a bucket manually.
 
-The first script is for a fresh project; run the second script afterward to enforce owner-only photo edits and deletion, including on an existing project. Data access is restricted to authenticated users who have an entry in `family_members`. Storage is private: the app creates time-limited signed links for the photo grid rather than making family photos public.
+The first script is for a fresh project; run the later scripts in timestamp order to update existing projects. Data access is restricted to authenticated users who have an entry in `family_members`. Storage is private: the app creates time-limited signed links for the photo grid rather than making family photos public. Avatar and photobook thumbnails use Supabase Storage image transformations; enable image transformations for your Supabase project.
+
+If Kinfolk reports that `profile_claim_requests` (or another people/tree/photobook table) is missing from the schema cache, the people/tree migration has not been applied to this Supabase project. Run `20261021000000_people_tree_collections.sql` in the SQL Editor, wait for it to finish, then refresh the app. If the migration just succeeded but the error persists, use **Project Settings → API → Reload schema cache** and refresh again.
+
+If local development reports `Object not found` while the deployed AWS site works, check that the project URL and publishable key in the local `.env` match the Supabase project configured in the ECS task definition. Local and deployed environments can point to different Supabase projects, each with separate users, migrations, and Storage files. Do not share or commit the publishable key or any secret key when asking for help.
+
+The people/tree migration transfers existing `parent_id1` and `parent_id2` links into `person_relationships`, then removes those legacy columns. Family admins should verify a claimant’s identity before approving profile claims; the UI does not independently verify identity.
+
+Run `20261022000000_standalone_profile_avatars.sql` after the people/tree migration to allow profile pictures to be uploaded independently of album photos. Run `20261023000000_profile_avatar_storage_read.sql` afterward to let approved family members load those avatars from private Storage.
+
+Profile owners and family admins can delete profiles; only family admins can delete unclaimed ghost profiles. Family members can delete shared photobooks, but deleting one never removes photos from the family album.
+
+Run `20261025000000_profile_bios.sql` after the profile and photobook management migration. A claimed profile owner can add or edit their 1,000-character bio; it is visible to approved family members.
 
 ### 4. Start the app and create your login
 
@@ -87,8 +105,12 @@ Only add people you trust: a family member can see the album and its photos. `fa
 - **Add a memory:** upload an image, choose a year, and tag family profiles. If a tagged person has not been added before, create their profile directly from the tagging form.
 - **Filter memories:** use the year dropdown and people filter.
 - **Open a photo:** select a card to read and add comments. Delete posts you uploaded from the photo detail view; Kinfolk asks for confirmation first.
-- **Explore the family tree:** open `/tree`. Add parent IDs to profile rows in the Supabase **Table Editor → profiles** table to connect people.
+- **Explore the family tree:** open `/tree`, add person profiles with or without a photo, drag the side dots between profiles to add a sibling link, use the top/bottom dots for parent, step-parent, guardian, or spouse links, and drag nodes to save the shared layout. Add a full birth date when you know it; the tree calculates age from that date.
+- **Claim a person profile:** open their profile page and request a claim. A family admin reviews and approves it before the account is linked.
+- **Set a profile picture:** open a person’s profile and either crop a photo you uploaded that tags them, or upload a separate image directly. The avatar upload does not add a photo to the family album.
+- **Create a photobook:** open `/collections`, create a named collection, then add shared family-album photos. Set a cover image and filter that collection by tagged people.
 - **Open a person:** select a name in the tree or family list to see photos tagged with that person at `/person/<profile-id>`.
+- **Add your bio:** after an admin approves your profile claim, open your profile and add a short introduction for the family.
 
 The database names use snake_case: for example, a photo record stores `file_path`, `uploaded_by`, and `tagged_profiles`. Photos are private Storage objects in `family-photos`; the `file_path` in `photos` is the object path, not a public URL.
 

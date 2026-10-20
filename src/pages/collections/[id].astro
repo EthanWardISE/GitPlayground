@@ -1,0 +1,20 @@
+---
+import FamilyApp from '../../components/FamilyApp';
+import '../../styles/family.css';
+
+export const prerender = false;
+const { id } = Astro.params;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="description" content="View family memories collected together." />
+		<title>Family photobook — Kinfolk</title>
+	</head>
+	<body>
+		<FamilyApp client:load view="collections" collectionId={id} />
+	</body>
+</html>

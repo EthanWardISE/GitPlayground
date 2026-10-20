@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { configureSupabaseClient, createSupabaseClient, PHOTO_BUCKET } from '../lib/supabase';
-import type { CommentDocument, CommentRow, PhotoDocument, ProfileDocument, ProfileRow } from '../types/database';
+import { configureSupabaseClient, createSupabaseClient, getSupabaseErrorMessage, PHOTO_BUCKET } from '../lib/supabase';
+import CollectionsPanel from './CollectionsPanel';
+import FamilyTreeCanvas from './FamilyTreeCanvas';
+import type { CommentDocument, CommentRow, PhotoDocument, ProfileClaimRequestRow, ProfileDocument, ProfileRow } from '../types/database';
 
 type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'setup' | 'error';
 interface AppUser {
@@ -11,14 +13,16 @@ interface AppUser {
 }
 
 interface FamilyAppProps {
-	view?: 'feed' | 'tree' | 'person';
+	view?: 'feed' | 'tree' | 'person' | 'collections';
 	personId?: string;
+	collectionId?: string;
 }
 
-function AppIcon({ name, size = 20 }: { name: 'home' | 'tree' | 'plus' | 'search' | 'heart' | 'arrow' | 'image' | 'close' | 'lock' | 'logout'; size?: number }) {
+function AppIcon({ name, size = 20 }: { name: 'home' | 'tree' | 'book' | 'plus' | 'search' | 'heart' | 'arrow' | 'image' | 'close' | 'lock' | 'logout'; size?: number }) {
 	const paths: Record<typeof name, string> = {
 		home: 'M3 10.5 12 3l9 7.5M5 9v11h14V9M9 20v-6h6v6',
 		tree: 'M12 21v-7m0-4V3m0 7-5-4m5 4 5-4M5 7l-2 2m14-2 2 2M9 14H6m9 0h3',
+		book: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5zm0 0v16M8 7h8M8 11h8',
 		plus: 'M12 5v14m-7-7h14',
 		search: 'm20 20-4.5-4.5M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
 		heart: 'M20.8 8.7c0 5.5-8.8 11-8.8 11s-8.8-5.5-8.8-11A4.7 4.7 0 0 1 12 6.2a4.7 4.7 0 0 1 8.8 2.5Z',
@@ -40,6 +44,14 @@ function initials(name: string) {
 	return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
 
+function formatBirthDate(value?: string) {
+	if (!value) return '';
+	const date = new Date(`${value}T00:00:00`);
+	return Number.isNaN(date.getTime())
+		? ''
+		: date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function createUuid() {
 	const bytes = new Uint8Array(16);
 	crypto.getRandomValues(bytes);
@@ -50,9 +62,15 @@ function createUuid() {
 }
 
 function getMessage(error: unknown): string {
-	if (error instanceof Error) return error.message;
-	if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message;
-	return 'Something went wrong. Please try again.';
+	return getSupabaseErrorMessage(error);
+}
+
+function isMissingStorageObject(error: unknown): boolean {
+	return typeof error === 'object'
+		&& error !== null
+		&& 'message' in error
+		&& typeof error.message === 'string'
+		&& /object not found|not found/i.test(error.message);
 }
 
 function toAppUser(user: User): AppUser {
@@ -68,9 +86,10 @@ function toProfile(profile: ProfileRow): ProfileDocument {
 		$id: profile.id,
 		name: profile.name,
 		avatarFileId: profile.avatar_file_path ?? undefined,
+		bio: profile.bio ?? undefined,
 		birthYear: profile.birth_year ?? undefined,
-		parentId1: profile.parent_id1 ?? undefined,
-		parentId2: profile.parent_id2 ?? undefined,
+		userId: profile.user_id ?? undefined,
+		birthDate: profile.birth_date ?? undefined,
 	};
 }
 
@@ -85,10 +104,12 @@ function toComment(comment: CommentRow): CommentDocument {
 	};
 }
 
-export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
+export default function FamilyApp({ view = 'feed', personId, collectionId }: FamilyAppProps) {
 	const [status, setStatus] = useState<AppStatus>('loading');
 	const [user, setUser] = useState<AppUser | null>(null);
+	const [isAdmin, setIsAdmin] = useState(false);
 	const [error, setError] = useState('');
+	const [loadWarning, setLoadWarning] = useState('');
 	const [authNotice, setAuthNotice] = useState('');
 	const [profiles, setProfiles] = useState<ProfileDocument[]>([]);
 	const [photos, setPhotos] = useState<PhotoDocument[]>([]);
@@ -96,6 +117,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 	const [yearFilter, setYearFilter] = useState('all');
 	const [personFilter, setPersonFilter] = useState<string[]>([]);
 	const [showUpload, setShowUpload] = useState(false);
+	const [showCreateProfile, setShowCreateProfile] = useState(false);
 	const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
 	const loadFamilyData = useCallback(async () => {
@@ -107,36 +129,66 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 		if (profileResult.error) throw profileResult.error;
 		if (photoResult.error) throw photoResult.error;
 
-		const photoDocuments = await Promise.all(photoResult.data.map(async (photo): Promise<PhotoDocument> => {
-			const { data, error: signedUrlError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(photo.file_path, 60 * 60);
-			if (signedUrlError) throw signedUrlError;
-			return {
-				$id: photo.id,
-				title: photo.title ?? undefined,
-				fileId: photo.file_path,
-				year: photo.year,
-				uploadedBy: photo.uploaded_by,
-				taggedProfiles: photo.tagged_profiles,
-				imageUrl: data.signedUrl,
-			};
-		}));
+		let missingStorageObjects = 0;
+		const [photoDocuments, profileDocuments] = await Promise.all([
+			Promise.all(photoResult.data.map(async (photo): Promise<PhotoDocument | null> => {
+				const { data, error: signedUrlError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(photo.file_path, 60 * 60);
+				if (signedUrlError) {
+					if (isMissingStorageObject(signedUrlError)) {
+						missingStorageObjects += 1;
+						return null;
+					}
+					throw signedUrlError;
+				}
+				return {
+					$id: photo.id,
+					title: photo.title ?? undefined,
+					fileId: photo.file_path,
+					year: photo.year,
+					uploadedBy: photo.uploaded_by,
+					taggedProfiles: photo.tagged_profiles,
+					imageUrl: data.signedUrl,
+				};
+			})),
+			Promise.all(profileResult.data.map(async (profile) => {
+				const document = toProfile(profile);
+				if (document.avatarFileId) {
+					const { data, error: avatarError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(
+						document.avatarFileId,
+						60 * 60,
+					);
+					if (avatarError) {
+						if (!isMissingStorageObject(avatarError)) throw avatarError;
+						missingStorageObjects += 1;
+					} else {
+						document.avatarUrl = data.signedUrl;
+					}
+				}
+				return document;
+			})),
+		]);
 
-		setProfiles(profileResult.data.map(toProfile));
-		setPhotos(photoDocuments);
+		setProfiles(profileDocuments);
+		setPhotos(photoDocuments.filter((photo): photo is PhotoDocument => photo !== null));
+		setLoadWarning(missingStorageObjects > 0
+			? 'Some images could not be read from Supabase Storage. The album is open, but affected photos are hidden and missing profile pictures use initials. Check that this project has run migration 20261023000000_profile_avatar_storage_read.sql, then verify the local .env points to the expected Supabase project.'
+			: '');
 	}, []);
 
 	const checkMembership = useCallback(async (activeUser: AppUser) => {
 		const { data: membership, error: membershipError } = await createSupabaseClient()
 			.from('family_members')
-			.select('user_id')
+			.select('user_id, role')
 			.eq('user_id', activeUser.$id)
 			.maybeSingle();
 		if (membershipError) throw membershipError;
 		setUser(activeUser);
 		if (!membership) {
+			setIsAdmin(false);
 			setStatus('pending');
 			return;
 		}
+		setIsAdmin(membership.role === 'admin');
 		await loadFamilyData();
 		setStatus('ready');
 	}, [loadFamilyData]);
@@ -246,7 +298,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 		}
 	}
 
-	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : 'The family album';
+	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : 'The family album';
 
 	if (status === 'loading') {
 		return <main className="screen-state"><div className="loading-mark">k</div><p>Gathering your family memories…</p></main>;
@@ -346,13 +398,17 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 				<nav className="side-nav" aria-label="Main navigation">
 					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`}><AppIcon name="home" /> Family album</a>
 					<a href="/tree" className={`nav-link ${view === 'tree' ? 'active' : ''}`}><AppIcon name="tree" /> Family tree</a>
+					<a href="/collections" className={`nav-link ${view === 'collections' ? 'active' : ''}`}><AppIcon name="book" /> Photobooks</a>
 				</nav>
 				<div className="sidebar-family">
 					<div className="sidebar-section-label">IN THE ALBUM <span>{profiles.length}</span></div>
 					<div className="family-mini-list">
 						{profiles.slice(0, 7).map((profile, index) => (
 							<a href={`/person/${profile.$id}`} className="family-mini" key={profile.$id}>
-								<span className={`avatar avatar-${index % 5}`}>{initials(profile.name)}</span><span>{profile.name}</span>
+								{profile.avatarUrl
+									? <img className="avatar family-mini-avatar" src={profile.avatarUrl} alt="" loading="lazy" />
+									: <span className={`avatar avatar-${index % 5}`}>{initials(profile.name)}</span>}
+								<span>{profile.name}</span>
 							</a>
 						))}
 					</div>
@@ -371,14 +427,20 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 						<button className="button button-primary button-small" onClick={() => setShowUpload(true)}><AppIcon name="plus" size={17} /> Add a memory</button>
 					</div>
 				</header>
+				{loadWarning && <p className="load-warning" role="status">{loadWarning}</p>}
 
-				{view === 'tree' ? (
+				{view === 'collections' ? (
+					<CollectionsPanel collectionId={collectionId} profiles={profiles} photos={photos} onOpenPhoto={setSelectedPhoto} />
+				) : view === 'tree' ? (
 					<section className="page-body">
 						<div className="page-heading">
 							<div><div className="eyebrow">Roots, branches & everything in between</div><h1>Our family tree</h1><p className="muted">A little map of the people who make us, us.</p></div>
-							<span className="heading-count">{profiles.length} PEOPLE</span>
+							<div className="tree-heading-actions">
+								<span className="heading-count">{profiles.length} PEOPLE</span>
+								<button className="button button-quiet button-small" onClick={() => setShowCreateProfile(true)}><AppIcon name="plus" size={16} /> Add person</button>
+							</div>
 						</div>
-						<div className="tree-canvas">{profiles.length ? <FamilyTree profiles={profiles} /> : <EmptyState title="Your tree is ready to grow" body="Add profiles with parent details to start connecting the branches." />}</div>
+						{profiles.length ? <FamilyTreeCanvas profiles={profiles} /> : <EmptyState title="Your tree is ready to grow" body="Add a person profile with or without a photo, then connect your family." />}
 					</section>
 				) : view === 'person' ? (
 					<section className="page-body">
@@ -386,9 +448,21 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 							<>
 								<a className="back-link" href="/tree">← Back to family tree</a>
 								<div className="person-profile">
-									<span className="avatar avatar-large">{initials(selectedPerson.name)}</span>
-									<div><div className="eyebrow">A member of the family</div><h1>{selectedPerson.name}</h1><p className="muted">{selectedPerson.birthYear ? `Born ${selectedPerson.birthYear} · ` : ''}${taggedPhotos.length} {taggedPhotos.length === 1 ? 'memory' : 'memories'} together</p></div>
+									{selectedPerson.avatarUrl
+										? <img className="avatar avatar-large person-avatar-image" src={selectedPerson.avatarUrl} alt="" />
+										: <span className="avatar avatar-large">{initials(selectedPerson.name)}</span>}
+									<div><div className="eyebrow">A member of the family</div><h1>{selectedPerson.name}</h1><p className="muted">{formatBirthDate(selectedPerson.birthDate) || (selectedPerson.birthYear ? `Born ${selectedPerson.birthYear}` : '')}{formatBirthDate(selectedPerson.birthDate) || selectedPerson.birthYear ? ' · ' : ''}{taggedPhotos.length} {taggedPhotos.length === 1 ? 'memory' : 'memories'} together</p></div>
 								</div>
+								<ProfileBio profile={selectedPerson} userId={user?.$id ?? ''} />
+								<ProfileActions
+									profile={selectedPerson}
+									photos={photos}
+									userId={user?.$id ?? ''}
+									isAdmin={isAdmin}
+									alreadyLinked={profiles.some((profile) => profile.userId === user?.$id)}
+									onUpdated={loadFamilyData}
+									onDeleted={() => window.location.assign('/tree')}
+								/>
 								<PhotoGrid photos={taggedPhotos} profiles={profiles} onOpen={setSelectedPhoto} />
 							</>
 						) : <EmptyState title="We can’t find that family member" body="They may not have been added to the family tree yet." />}
@@ -396,7 +470,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 				) : (
 					<section className="page-body">
 						<div className="welcome-banner">
-							<div className="welcome-copy"><div className="eyebrow">A little hello to the whole family</div><h1>Good things are<br />better shared.</h1><p>All your favourite people, and the moments that make you one big story.</p><div className="welcome-people">{profiles.slice(0, 5).map((profile, index) => <a key={profile.$id} href={`/person/${profile.$id}`} className={`avatar avatar-${index % 5}`} title={profile.name}>{initials(profile.name)}</a>)}<a href="/tree" className="people-more">See your family <AppIcon name="arrow" size={14} /></a></div></div>
+							<div className="welcome-copy"><div className="eyebrow">A little hello to the whole family</div><h1>Good things are<br />better shared.</h1><p>All your favourite people, and the moments that make you one big story.</p><div className="welcome-people">{profiles.slice(0, 5).map((profile, index) => <a key={profile.$id} href={`/person/${profile.$id}`} className={`avatar avatar-${index % 5} welcome-person-avatar`} title={profile.name}>{profile.avatarUrl ? <img src={profile.avatarUrl} alt={profile.name} loading="lazy" /> : initials(profile.name)}</a>)}<a href="/tree" className="people-more">See your family <AppIcon name="arrow" size={14} /></a></div></div>
 							<div className="welcome-art" aria-hidden="true"><span className="sun-shape" /><span className="art-leaf leaf-one" /><span className="art-leaf leaf-two" /><span className="art-pot" /><span className="art-flower">✳</span></div>
 							<span className="banner-note">MADE OF LITTLE MOMENTS</span>
 						</div>
@@ -405,6 +479,7 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 							<div className="feed-filters">
 								<label className="filter-select"><span className="sr-only">Filter memories by year</span><select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)}><option value="all">Every year</option>{years.map((year) => <option value={year} key={year}>{year}</option>)}</select></label>
 								<details className="person-filter"><summary><AppIcon name="search" size={16} /> {personFilter.length ? `${personFilter.length} people` : 'Everyone'} <span aria-hidden="true">⌄</span></summary><div className="filter-popover">{profiles.map((profile) => <label key={profile.$id}><input type="checkbox" checked={personFilter.includes(profile.$id)} onChange={() => setPersonFilter((current) => current.includes(profile.$id) ? current.filter((id) => id !== profile.$id) : [...current, profile.$id])} />{profile.name}</label>)}</div></details>
+								{personFilter.length > 0 && <button className="text-link" type="button" onClick={() => setPersonFilter([])}>Clear people filter</button>}
 							</div>
 						</div>
 						{filteredPhotos.length ? <PhotoGrid photos={filteredPhotos} profiles={profiles} onOpen={setSelectedPhoto} /> : <EmptyState title="The best memories are still to come" body="Add the first photo to start filling this family album." action={<button className="button button-primary" onClick={() => setShowUpload(true)}><AppIcon name="plus" size={17} /> Add a memory</button>} />}
@@ -413,11 +488,461 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 			</main>
 
 			{showUpload && <UploadDialog profiles={profiles} onClose={() => setShowUpload(false)} onCreated={async () => { await loadFamilyData(); setShowUpload(false); }} />}
+			{showCreateProfile && <CreatePersonDialog onClose={() => setShowCreateProfile(false)} onCreated={(profileId) => {
+				window.location.assign(`/person/${profileId}`);
+			}} />}
+			{isAdmin && <ClaimRequestsPanel profiles={profiles} onReviewed={loadFamilyData} />}
 			{selectedPhoto && <PhotoDialog photo={selectedPhoto} profiles={profiles} user={user} onClose={() => setSelectedPhoto(null)} onDeleted={(photoId) => {
 				setPhotos((current) => current.filter((photo) => photo.$id !== photoId));
 				setSelectedPhoto((current) => current?.$id === photoId ? null : current);
 			}} />}
 		</div>
+	);
+}
+
+function CreatePersonDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (profileId: string) => void }) {
+	const [name, setName] = useState('');
+	const [birthDate, setBirthDate] = useState('');
+	const [error, setError] = useState('');
+	const [saving, setSaving] = useState(false);
+
+	async function createProfile(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const profileName = name.trim();
+		if (!profileName) {
+			setError('Enter a name for this person.');
+			return;
+		}
+
+		setSaving(true);
+		setError('');
+		try {
+			const { data, error: profileError } = await createSupabaseClient()
+				.from('profiles')
+				.insert({ name: profileName, birth_date: birthDate || null })
+				.select('id')
+				.single();
+			if (profileError) throw profileError;
+			onCreated(data.id);
+		} catch (profileError) {
+			setError(getMessage(profileError));
+			setSaving(false);
+		}
+	}
+
+	return (
+		<div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+			<section className="modal-card upload-modal" role="dialog" aria-modal="true" aria-labelledby="create-person-title">
+				<div className="modal-header">
+					<div><div className="eyebrow">A new branch in the family</div><h2 id="create-person-title">Create a person profile</h2></div>
+					<button className="icon-button" type="button" onClick={onClose} aria-label="Close" disabled={saving}><AppIcon name="close" size={17} /></button>
+				</div>
+				<p className="muted">No photo is needed. If this is your profile, you can request to claim it next; a family admin will review the request.</p>
+				<form className="upload-form" onSubmit={(event) => void createProfile(event)}>
+					<label>Person’s name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required /></label>
+					<label>Birth date (optional)<input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>
+					{error && <p className="form-error" role="alert">{error}</p>}
+					<div className="modal-actions">
+						<button className="button button-quiet" type="button" onClick={onClose} disabled={saving}>Cancel</button>
+						<button className="button button-primary" type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create profile'}</button>
+					</div>
+				</form>
+			</section>
+		</div>
+	);
+}
+
+function ProfileBio({ profile, userId }: { profile: ProfileDocument; userId: string }) {
+	const [bio, setBio] = useState(profile.bio ?? '');
+	const [editing, setEditing] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState('');
+	const [notice, setNotice] = useState('');
+	const canEdit = Boolean(profile.userId && profile.userId === userId);
+
+	async function saveBio(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		setError('');
+		setNotice('');
+		try {
+			const { error: saveError } = await createSupabaseClient().rpc('update_my_profile_bio', {
+				p_bio: bio.trim() || null,
+			});
+			if (saveError) throw saveError;
+			setBio(bio.trim());
+			setEditing(false);
+			setNotice('Your bio is saved.');
+		} catch (saveError) {
+			setError(getMessage(saveError));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<section className="profile-bio" aria-label={`${profile.name} bio`}>
+			<div className="profile-bio-heading"><h2>About {profile.name}</h2>{canEdit && !editing && <button className="text-link" type="button" onClick={() => { setBio(profile.bio ?? ''); setEditing(true); }}>{bio ? 'Edit bio' : 'Add a bio'}</button>}</div>
+			{editing ? (
+				<form className="profile-bio-form" onSubmit={(event) => void saveBio(event)}>
+					<label htmlFor="profile-bio-input">A little about yourself</label>
+					<textarea id="profile-bio-input" value={bio} onChange={(event) => setBio(event.target.value)} maxLength={1000} rows={4} placeholder="Share a few words about yourself with your family…" />
+					<small>{bio.length}/1000</small>
+					{error && <p className="form-error" role="alert">{error}</p>}
+					<div className="profile-bio-actions">
+						<button className="button button-quiet button-small" type="button" onClick={() => { setBio(profile.bio ?? ''); setEditing(false); }} disabled={saving}>Cancel</button>
+						<button className="button button-primary button-small" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save bio'}</button>
+					</div>
+				</form>
+			) : (
+				<p className="muted">{bio || (canEdit ? 'Add a little introduction for your family.' : 'No bio shared yet.')}</p>
+			)}
+			{notice && <p className="form-notice" role="status">{notice}</p>}
+		</section>
+	);
+}
+
+function ProfileActions({ profile, photos, userId, isAdmin, alreadyLinked, onUpdated, onDeleted }: {
+	profile: ProfileDocument;
+	photos: PhotoDocument[];
+	userId: string;
+	isAdmin: boolean;
+	alreadyLinked: boolean;
+	onUpdated: () => Promise<void>;
+	onDeleted: () => void;
+}) {
+	const [claimStatus, setClaimStatus] = useState<ProfileClaimRequestRow['status'] | null>(null);
+	const [selectedPhotoId, setSelectedPhotoId] = useState('');
+	const [avatarFile, setAvatarFile] = useState<File | null>(null);
+	const [avatarFilePreview, setAvatarFilePreview] = useState('');
+	const [cropX, setCropX] = useState(50);
+	const [cropY, setCropY] = useState(50);
+	const [cropZoom, setCropZoom] = useState(1);
+	const [error, setError] = useState('');
+	const [saving, setSaving] = useState(false);
+	const [notice, setNotice] = useState('');
+	const eligiblePhotos = photos.filter((photo) => photo.uploadedBy === userId && photo.taggedProfiles.includes(profile.$id));
+	const selectedPhoto = eligiblePhotos.find((photo) => photo.$id === selectedPhotoId);
+	const avatarPreview = avatarFilePreview || selectedPhoto?.imageUrl || '';
+	const canManageProfile = isAdmin || profile.userId === userId;
+
+	useEffect(() => {
+		if (!avatarFile) {
+			setAvatarFilePreview('');
+			return;
+		}
+		const previewUrl = URL.createObjectURL(avatarFile);
+		setAvatarFilePreview(previewUrl);
+		return () => URL.revokeObjectURL(previewUrl);
+	}, [avatarFile]);
+
+	useEffect(() => {
+		let cancelled = false;
+		async function loadClaimStatus() {
+			if (!userId || profile.userId) return;
+			const { data, error: claimError } = await createSupabaseClient()
+				.from('profile_claim_requests')
+				.select('status')
+				.eq('profile_id', profile.$id)
+				.eq('claimant_id', userId)
+				.order('created_at', { ascending: false })
+				.limit(1);
+			if (claimError) {
+				if (!cancelled) setError(getMessage(claimError));
+				return;
+			}
+			if (!cancelled) setClaimStatus(data[0]?.status ?? null);
+		}
+		void loadClaimStatus();
+		return () => { cancelled = true; };
+	}, [profile.$id, profile.userId, userId]);
+
+	async function requestClaim() {
+		setSaving(true);
+		setError('');
+		try {
+			const { error: requestError } = await createSupabaseClient().rpc('request_profile_claim', {
+				p_profile_id: profile.$id,
+			});
+			if (requestError) throw requestError;
+			setClaimStatus('pending');
+		} catch (requestError) {
+			setError(getMessage(requestError));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function setAvatar() {
+		const photo = eligiblePhotos.find((item) => item.$id === selectedPhotoId);
+		if ((!photo && !avatarFile) || !userId) return;
+		setSaving(true);
+		setError('');
+		let previewUrl: string | undefined;
+		let avatarPath: string | undefined;
+		try {
+			const supabase = createSupabaseClient();
+			let source: Blob;
+			if (avatarFile) {
+				source = avatarFile;
+			} else {
+				const { data, error: sourceError } = await supabase.storage.from(PHOTO_BUCKET).download(photo!.fileId);
+				if (sourceError) throw sourceError;
+				source = data;
+			}
+			previewUrl = URL.createObjectURL(source);
+
+			const image = new Image();
+			image.src = previewUrl;
+			await new Promise<void>((resolve, reject) => {
+				image.onload = () => resolve();
+				image.onerror = () => reject(new Error('Could not open this photo for cropping.'));
+			});
+			const side = Math.min(image.naturalWidth, image.naturalHeight) / cropZoom;
+			if (!side) throw new Error('This image has no usable dimensions.');
+			const sourceX = (image.naturalWidth - side) * cropX / 100;
+			const sourceY = (image.naturalHeight - side) * cropY / 100;
+			const canvas = document.createElement('canvas');
+			canvas.width = 256;
+			canvas.height = 256;
+			const context = canvas.getContext('2d');
+			if (!context) throw new Error('Your browser could not prepare the cropped avatar.');
+			context.drawImage(
+				image,
+				sourceX,
+				sourceY,
+				side,
+				side,
+				0,
+				0,
+				256,
+				256,
+			);
+			const blob = await new Promise<Blob>((resolve, reject) => {
+				canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Could not encode the cropped avatar.')), 'image/webp', 0.82);
+			});
+			avatarPath = `${userId}/profile-avatars/${createUuid()}.webp`;
+			const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(avatarPath, blob, {
+				contentType: 'image/webp',
+				upsert: false,
+			});
+			if (uploadError) throw uploadError;
+
+			const { error: updateError } = await supabase.rpc('set_profile_avatar', {
+				p_profile_id: profile.$id,
+				p_source_photo_id: avatarFile ? null : photo!.$id,
+				p_avatar_path: avatarPath,
+			});
+			if (updateError) {
+				const { error: cleanupError } = await supabase.storage.from(PHOTO_BUCKET).remove([avatarPath]);
+				if (cleanupError) throw new Error(`${updateError.message} The unused avatar file could not be removed (${cleanupError.message}).`);
+				throw updateError;
+			}
+			await onUpdated();
+			setNotice('Profile picture updated.');
+		} catch (avatarError) {
+			setError(getMessage(avatarError));
+		} finally {
+			if (previewUrl) URL.revokeObjectURL(previewUrl);
+			setSaving(false);
+		}
+	}
+
+	async function removeAvatar() {
+		if (!window.confirm(`Remove ${profile.name}’s profile picture?`)) return;
+		setSaving(true);
+		setError('');
+		setNotice('');
+		try {
+			const { data: avatarPath, error: clearError } = await createSupabaseClient()
+				.rpc('clear_profile_avatar', { p_profile_id: profile.$id });
+			if (clearError) throw clearError;
+			if (avatarPath && avatarPath.startsWith(`${userId}/`)) {
+				const { error: removeError } = await createSupabaseClient().storage.from(PHOTO_BUCKET).remove([avatarPath]);
+				if (removeError) throw new Error(`The profile picture was removed, but its stored image could not be cleaned up: ${removeError.message}`);
+			}
+			await onUpdated();
+			setNotice('Profile picture removed.');
+		} catch (removeError) {
+			setError(getMessage(removeError));
+			await onUpdated();
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function deleteProfile() {
+		if (!window.confirm(`Delete ${profile.name}’s profile? This removes them from the family tree and cannot be undone. Family photos they are tagged in will remain in the album.`)) return;
+		setSaving(true);
+		setError('');
+		try {
+			const { data, error: deleteError } = await createSupabaseClient()
+				.from('profiles')
+				.delete()
+				.eq('id', profile.$id)
+				.select('id');
+			if (deleteError) throw deleteError;
+			if (!data.length) throw new Error('You do not have permission to delete this profile.');
+			if (profile.avatarFileId?.startsWith(`${userId}/`)) {
+				const { error: removeError } = await createSupabaseClient().storage.from(PHOTO_BUCKET).remove([profile.avatarFileId]);
+				if (removeError) window.alert(`The profile was deleted, but its stored picture could not be cleaned up: ${removeError.message}`);
+			}
+			onDeleted();
+		} catch (deleteError) {
+			setError(getMessage(deleteError));
+			setSaving(false);
+		}
+	}
+
+	return (
+		<div className="profile-actions">
+			{!profile.userId && !alreadyLinked && (
+				<div className="claim-card">
+					<div><strong>Is this you?</strong><p>A family admin will review your request before linking this profile to your account.</p></div>
+					{claimStatus === 'pending'
+						? <span className="claim-status">Request pending review</span>
+						: claimStatus === 'approved'
+							? <span className="claim-status">Claim approved</span>
+							: <button className="button button-quiet" onClick={requestClaim} disabled={saving}>{saving ? 'Sending…' : 'Claim this profile'}</button>}
+				</div>
+			)}
+			{eligiblePhotos.length > 0 && (
+				<div className="avatar-picker">
+					<label>Set a profile picture from a photo you shared
+						<select value={selectedPhotoId} onChange={(event) => { setSelectedPhotoId(event.target.value); setAvatarFile(null); setCropX(50); setCropY(50); setCropZoom(1); }}>
+							<option value="">Choose a tagged photo</option>
+							{eligiblePhotos.map((photo) => <option key={photo.$id} value={photo.$id}>{photo.title || `Memory from ${photo.year}`}</option>)}
+						</select>
+					</label>
+					{avatarPreview && <div className="avatar-crop-controls">
+						<img
+							src={avatarPreview}
+							alt="Avatar crop preview"
+							style={{ objectPosition: `${cropX}% ${cropY}%`, transform: `scale(${cropZoom})` }}
+						/>
+						<label>Horizontal crop <input type="range" min="0" max="100" value={cropX} onChange={(event) => setCropX(Number(event.target.value))} /></label>
+						<label>Vertical crop <input type="range" min="0" max="100" value={cropY} onChange={(event) => setCropY(Number(event.target.value))} /></label>
+						<label>Zoom <input type="range" min="1" max="3" step="0.1" value={cropZoom} onChange={(event) => setCropZoom(Number(event.target.value))} /></label>
+					</div>}
+				</div>
+			)}
+			<div className="avatar-picker">
+				<label>Or upload a profile picture directly
+					<input
+						type="file"
+						accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+						onChange={(event) => {
+							const file = event.target.files?.[0] ?? null;
+							if (file && !['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'].includes(file.type)) {
+								setError('Choose a JPEG, PNG, WebP, GIF, or AVIF image.');
+								event.target.value = '';
+								return;
+							}
+							if (file && file.size > 50 * 1024 * 1024) {
+								setError('Choose an image smaller than 50 MiB.');
+								event.target.value = '';
+								return;
+							}
+							setError('');
+							setSelectedPhotoId('');
+							setAvatarFile(file);
+							setCropX(50);
+							setCropY(50);
+							setCropZoom(1);
+						}}
+					/>
+				</label>
+				{avatarFile && <div className="avatar-crop-controls">
+					<img src={avatarFilePreview} alt="Avatar crop preview" style={{ objectPosition: `${cropX}% ${cropY}%`, transform: `scale(${cropZoom})` }} />
+					<label>Horizontal crop <input type="range" min="0" max="100" value={cropX} onChange={(event) => setCropX(Number(event.target.value))} /></label>
+					<label>Vertical crop <input type="range" min="0" max="100" value={cropY} onChange={(event) => setCropY(Number(event.target.value))} /></label>
+					<label>Zoom <input type="range" min="1" max="3" step="0.1" value={cropZoom} onChange={(event) => setCropZoom(Number(event.target.value))} /></label>
+				</div>}
+				<button className="button button-quiet" onClick={() => void setAvatar()} disabled={(!selectedPhotoId && !avatarFile) || saving}>{saving ? 'Saving…' : 'Crop and set avatar'}</button>
+				{profile.avatarFileId && canManageProfile && <button className="text-link profile-remove-avatar" type="button" onClick={() => void removeAvatar()} disabled={saving}>Remove current picture</button>}
+			</div>
+			{canManageProfile && <div className="profile-management">
+				<p className="muted">{isAdmin && profile.userId !== userId ? 'As a family admin, you can remove this profile.' : 'Manage this person profile.'}</p>
+				<button className="button button-danger button-small" type="button" onClick={() => void deleteProfile()} disabled={saving}>{saving ? 'Deleting…' : 'Delete profile'}</button>
+			</div>}
+			{notice && <p className="form-notice" role="status">{notice}</p>}
+			{error && <p className="form-error" role="alert">{error}</p>}
+		</div>
+	);
+}
+
+function ClaimRequestsPanel({ profiles, onReviewed }: { profiles: ProfileDocument[]; onReviewed: () => Promise<void> }) {
+	const [requests, setRequests] = useState<ProfileClaimRequestRow[]>([]);
+	const [names, setNames] = useState<Record<string, string>>({});
+	const [error, setError] = useState('');
+	const [busyId, setBusyId] = useState('');
+
+	useEffect(() => {
+		let cancelled = false;
+		async function loadRequests() {
+			try {
+				const supabase = createSupabaseClient();
+				const { data, error: requestError } = await supabase
+					.from('profile_claim_requests')
+					.select('*')
+					.eq('status', 'pending')
+					.order('created_at');
+				if (requestError) throw requestError;
+				const claimantIds = [...new Set(data.map((request) => request.claimant_id))];
+				const memberNames: Record<string, string> = {};
+				if (claimantIds.length) {
+					const { data: members, error: membersError } = await supabase
+						.from('family_members')
+						.select('user_id, full_name')
+						.in('user_id', claimantIds);
+					if (membersError) throw membersError;
+					for (const member of members) memberNames[member.user_id] = member.full_name;
+				}
+				if (!cancelled) {
+					setRequests(data);
+					setNames(memberNames);
+				}
+			} catch (loadError) {
+				if (!cancelled) setError(getMessage(loadError));
+			}
+		}
+		void loadRequests();
+		return () => { cancelled = true; };
+	}, []);
+
+	async function review(requestId: string, approve: boolean) {
+		setBusyId(requestId);
+		setError('');
+		try {
+			const { error: reviewError } = await createSupabaseClient().rpc('review_profile_claim', {
+				p_request_id: requestId,
+				p_approve: approve,
+			});
+			if (reviewError) throw reviewError;
+			setRequests((current) => current.filter((request) => request.id !== requestId));
+			await onReviewed();
+		} catch (reviewError) {
+			setError(getMessage(reviewError));
+		} finally {
+			setBusyId('');
+		}
+	}
+
+	return (
+		<section className="claim-review-panel">
+			<div className="claim-review-heading"><div className="eyebrow">Admin tools</div><strong>Profile claim requests</strong><small>Verify a claimant’s identity before approving.</small></div>
+			{error && <p className="form-error" role="alert">{error}</p>}
+			{requests.length === 0 && !error && <p className="muted">No pending profile claims.</p>}
+			{requests.map((request) => (
+				<div className="claim-review-row" key={request.id}>
+					<span><strong>{names[request.claimant_id] ?? 'Family member'}</strong> wants to claim <b>{profiles.find((profile) => profile.$id === request.profile_id)?.name ?? 'a person profile'}</b></span>
+					<div>
+						<button className="button button-quiet" disabled={busyId === request.id} onClick={() => void review(request.id, false)}>Decline</button>
+						<button className="button button-primary" disabled={busyId === request.id} onClick={() => void review(request.id, true)}>{busyId === request.id ? 'Reviewing…' : 'Approve'}</button>
+					</div>
+				</div>
+			))}
+		</section>
 	);
 }
 
@@ -441,28 +966,6 @@ function PhotoGrid({ photos, profiles, onOpen }: { photos: PhotoDocument[]; prof
 	);
 }
 
-function FamilyTree({ profiles }: { profiles: ProfileDocument[] }) {
-	const children = new Map<string, ProfileDocument[]>();
-	const childIds = new Set<string>();
-	for (const profile of profiles) {
-		for (const parentId of [profile.parentId1, profile.parentId2]) {
-			if (!parentId || !profiles.some((person) => person.$id === parentId)) continue;
-			children.set(parentId, [...(children.get(parentId) ?? []), profile]);
-			childIds.add(profile.$id);
-		}
-	}
-	const roots = profiles.filter((profile) => !childIds.has(profile.$id));
-	const startingPoints = roots.length ? roots : profiles.slice(0, 1);
-	return <div className="family-tree">{startingPoints.map((profile) => <TreeBranch key={profile.$id} profile={profile} childrenMap={children} seen={new Set()} />)}</div>;
-}
-
-function TreeBranch({ profile, childrenMap, seen }: { profile: ProfileDocument; childrenMap: Map<string, ProfileDocument[]>; seen: Set<string> }) {
-	if (seen.has(profile.$id)) return null;
-	const nextSeen = new Set(seen).add(profile.$id);
-	const descendants = childrenMap.get(profile.$id) ?? [];
-	return <div className="tree-branch"><a href={`/person/${profile.$id}`} className="tree-person"><span className="avatar">{initials(profile.name)}</span><span><b>{profile.name}</b><small>{profile.birthYear || 'Family member'}</small></span></a>{descendants.length > 0 && <div className="tree-children">{descendants.map((child) => <TreeBranch key={child.$id} profile={child} childrenMap={childrenMap} seen={nextSeen} />)}</div>}</div>;
-}
-
 function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocument[]; onClose: () => void; onCreated: () => Promise<void> }) {
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const [search, setSearch] = useState('');
@@ -470,6 +973,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 	const [saving, setSaving] = useState(false);
 	const [creatingProfile, setCreatingProfile] = useState(false);
 	const [newProfileName, setNewProfileName] = useState('');
+	const [newProfileBirthDate, setNewProfileBirthDate] = useState('');
 	const [availableProfiles, setAvailableProfiles] = useState(profiles);
 
 	async function createProfile() {
@@ -479,7 +983,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 		try {
 			const { data: profile, error: profileError } = await createSupabaseClient()
 				.from('profiles')
-				.insert({ name })
+				.insert({ name, birth_date: newProfileBirthDate || null })
 				.select('*')
 				.single();
 			if (profileError) throw profileError;
@@ -489,6 +993,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 			setSearch('');
 			setCreatingProfile(false);
 			setNewProfileName('');
+			setNewProfileBirthDate('');
 		} catch (profileError) {
 			setError(getMessage(profileError));
 		}
@@ -580,7 +1085,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 					<label>Choose a photo<input name="photo" type="file" accept="image/*" required /></label>
 					<div className="form-two"><label>Give it a little title<input name="title" placeholder="Sunday at grandma’s" /></label><label>What year was it?<input name="year" type="number" min="1800" max={new Date().getFullYear()} defaultValue={new Date().getFullYear()} required /></label></div>
 					<div className="tagging-block"><label htmlFor="profile-search">Who’s in this memory?</label><input id="profile-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search family members…" />{selectedIds.length > 0 && <div className="selected-tags">{selectedIds.map((id) => { const profile = availableProfiles.find((person) => person.$id === id); return profile ? <button type="button" className="tag-chip selected" key={id} onClick={() => setSelectedIds((current) => current.filter((item) => item !== id))}>{profile.name} <span>×</span></button> : null; })}</div>}<div className="profile-options">{filteredProfiles.map((profile) => <button type="button" className={`tag-chip ${selectedIds.includes(profile.$id) ? 'selected' : ''}`} key={profile.$id} onClick={() => setSelectedIds((current) => current.includes(profile.$id) ? current.filter((id) => id !== profile.$id) : [...current, profile.$id])}>{profile.name}</button>)}</div>{!filteredProfiles.length && search && <button className="text-link inline-link" type="button" onClick={() => { setNewProfileName(search); setCreatingProfile(true); }}>+ Add “{search}” as a new family member</button>}</div>
-					{creatingProfile && <div className="inline-profile-form"><label>New family member’s name<input autoFocus value={newProfileName} onChange={(event) => setNewProfileName(event.target.value)} required /></label><button className="button button-quiet" type="button" onClick={createProfile}>Create profile</button><button className="text-link" type="button" onClick={() => setCreatingProfile(false)}>Cancel</button></div>}
+					{creatingProfile && <div className="inline-profile-form"><label>New family member’s name<input autoFocus value={newProfileName} onChange={(event) => setNewProfileName(event.target.value)} required /></label><label>Birth date (optional)<input type="date" max={new Date().toISOString().slice(0, 10)} value={newProfileBirthDate} onChange={(event) => setNewProfileBirthDate(event.target.value)} /></label><button className="button button-quiet" type="button" onClick={createProfile}>Create profile</button><button className="text-link" type="button" onClick={() => setCreatingProfile(false)}>Cancel</button></div>}
 					{error && <p className="form-error" role="alert">{error}</p>}
 					<div className="modal-actions"><button className="button button-quiet" type="button" onClick={onClose}>Cancel</button><button className="button button-primary" type="submit" disabled={saving}>{saving ? 'Adding your memory…' : <><AppIcon name="plus" size={17} /> Add to family album</>}</button></div>
 				</form>
