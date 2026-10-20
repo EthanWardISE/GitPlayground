@@ -40,6 +40,15 @@ function initials(name: string) {
 	return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
 
+function createUuid() {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	bytes[6] = (bytes[6] & 0x0f) | 0x40;
+	bytes[8] = (bytes[8] & 0x3f) | 0x80;
+	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function getMessage(error: unknown): string {
 	if (error instanceof Error) return error.message;
 	if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message;
@@ -531,7 +540,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 			if (userError) throw userError;
 			if (!userData.user) throw new Error('Your session expired. Sign in again before uploading a photo.');
 
-			filePath = `${userData.user.id}/${crypto.randomUUID()}.${extension}`;
+			filePath = `${userData.user.id}/${createUuid()}.${extension}`;
 			const { error: storageError } = await supabase.storage
 				.from(PHOTO_BUCKET)
 				.upload(filePath, file, { contentType: file.type, upsert: false });
