@@ -404,7 +404,10 @@ export default function FamilyApp({ view = 'feed', personId }: FamilyAppProps) {
 			</main>
 
 			{showUpload && <UploadDialog profiles={profiles} onClose={() => setShowUpload(false)} onCreated={async () => { await loadFamilyData(); setShowUpload(false); }} />}
-			{selectedPhoto && <PhotoDialog photo={selectedPhoto} profiles={profiles} user={user} onClose={() => setSelectedPhoto(null)} />}
+			{selectedPhoto && <PhotoDialog photo={selectedPhoto} profiles={profiles} user={user} onClose={() => setSelectedPhoto(null)} onDeleted={(photoId) => {
+				setPhotos((current) => current.filter((photo) => photo.$id !== photoId));
+				setSelectedPhoto((current) => current?.$id === photoId ? null : current);
+			}} />}
 		</div>
 	);
 }
@@ -519,20 +522,21 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 			setSaving(false);
 			return;
 		}
-		const filePath = `${crypto.randomUUID()}.${extension}`;
+		let filePath: string | null = null;
 		let fileUploaded = false;
 		let photoSaved = false;
 
 		try {
+			const { data: userData, error: userError } = await supabase.auth.getUser();
+			if (userError) throw userError;
+			if (!userData.user) throw new Error('Your session expired. Sign in again before uploading a photo.');
+
+			filePath = `${userData.user.id}/${crypto.randomUUID()}.${extension}`;
 			const { error: storageError } = await supabase.storage
 				.from(PHOTO_BUCKET)
 				.upload(filePath, file, { contentType: file.type, upsert: false });
 			if (storageError) throw storageError;
 			fileUploaded = true;
-
-			const { data: userData, error: userError } = await supabase.auth.getUser();
-			if (userError) throw userError;
-			if (!userData.user) throw new Error('Your session expired. Sign in again before uploading a photo.');
 
 			const { error: photoError } = await supabase.from('photos').insert({
 				title: String(data.get('title') ?? '').trim() || null,
@@ -546,7 +550,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 			await onCreated();
 		} catch (uploadError) {
 			let message = getMessage(uploadError);
-			if (fileUploaded && !photoSaved) {
+			if (fileUploaded && !photoSaved && filePath) {
 				const { error: cleanupError } = await supabase.storage.from(PHOTO_BUCKET).remove([filePath]);
 				if (cleanupError) {
 					message += ` The uploaded file could not be removed automatically (${cleanupError.message}); delete ${filePath} from Storage.`;
@@ -576,10 +580,12 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 	);
 }
 
-function PhotoDialog({ photo, profiles, user, onClose }: { photo: PhotoDocument; profiles: ProfileDocument[]; user: AppUser | null; onClose: () => void }) {
+function PhotoDialog({ photo, profiles, user, onClose, onDeleted }: { photo: PhotoDocument; profiles: ProfileDocument[]; user: AppUser | null; onClose: () => void; onDeleted: (photoId: string) => void }) {
 	const [comments, setComments] = useState<CommentDocument[]>([]);
 	const [error, setError] = useState('');
 	const [saving, setSaving] = useState(false);
+	const [deleteError, setDeleteError] = useState('');
+	const [deleting, setDeleting] = useState(false);
 	const tagged = profiles.filter((profile) => photo.taggedProfiles.includes(profile.$id));
 
 	useEffect(() => {
@@ -631,12 +637,47 @@ function PhotoDialog({ photo, profiles, user, onClose }: { photo: PhotoDocument;
 		}
 	}
 
+	async function deletePost() {
+		if (!user || user.$id !== photo.uploadedBy) return;
+		if (!window.confirm('Delete this post? This cannot be undone.')) return;
+
+		setDeleting(true);
+		setDeleteError('');
+		let storageObjectRemoved = false;
+		try {
+			const supabase = createSupabaseClient();
+			const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([photo.fileId]);
+			if (storageError) throw storageError;
+			storageObjectRemoved = true;
+
+			const { data: deletedPhoto, error: deleteError } = await supabase
+				.from('photos')
+				.delete()
+				.eq('id', photo.$id)
+				.eq('uploaded_by', user.$id)
+				.select('id')
+				.maybeSingle();
+			if (deleteError) throw deleteError;
+			if (!deletedPhoto) throw new Error('This post is no longer available or you do not have permission to delete it.');
+
+			onDeleted(photo.$id);
+		} catch (deleteError) {
+			const message = getMessage(deleteError);
+			setDeleteError(storageObjectRemoved
+				? `The photo was removed, but the post could not be deleted: ${message} Please try deleting it again.`
+				: message);
+		} finally {
+			setDeleting(false);
+		}
+	}
+
 	return (
 		<div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
 			<section className="modal-card photo-detail-modal" role="dialog" aria-modal="true" aria-label={photo.title || 'Family memory'}>
 				<button className="icon-button photo-close" onClick={onClose} aria-label="Close"><AppIcon name="close" /></button>
 				<img className="detail-image" src={photo.imageUrl} alt={photo.title || `Family memory from ${photo.year}`} />
-				<div className="detail-content"><div className="eyebrow">{photo.year} · SHARED WITH LOVE</div><h2>{photo.title || 'A moment together'}</h2><div className="detail-tags">{tagged.map((profile) => <a className="tag-chip" href={`/person/${profile.$id}`} key={profile.$id}>{profile.name}</a>)}</div>
+				<div className="detail-content"><div className="detail-heading"><div><div className="eyebrow">{photo.year} · SHARED WITH LOVE</div><h2>{photo.title || 'A moment together'}</h2></div>{user?.$id === photo.uploadedBy && <button className="button button-danger button-small" onClick={deletePost} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete Post'}</button>}</div><div className="detail-tags">{tagged.map((profile) => <a className="tag-chip" href={`/person/${profile.$id}`} key={profile.$id}>{profile.name}</a>)}</div>
+					{deleteError && <p className="form-error" role="alert">{deleteError}</p>}
 					<div className="comment-section"><h3>Little notes <span>{comments.length}</span></h3>{comments.map((comment) => <div className="comment-row" key={comment.$id}><span className="avatar avatar-small">{initials(comment.authorName)}</span><p><b>{comment.authorName}</b><span>{comment.content}</span></p></div>)}{!comments.length && !error && <p className="muted comment-empty">No notes yet. Leave the first one.</p>}{error && <p className="form-error" role="alert">{error}</p>}
 						<form className="comment-form" onSubmit={submitComment}><input name="content" maxLength={2000} required placeholder="Leave a little note…" aria-label="Write a comment" /><button type="submit" disabled={saving} aria-label="Send comment"><AppIcon name="arrow" size={17} /></button></form>
 					</div>
