@@ -30,6 +30,63 @@ The app is deliberately small, private, and tactile: off-whites, soft sepias, fo
 
 Feature updates are shaped and delivered through user stories: each change starts with a family need, defines the permission and UX boundary, and is validated through focused checks, mobile smoke tests, and the production pipeline. This keeps product decisions human while keeping implementation measurable.
 
+## Everything worth keeping
+
+<p align="center"><em>A private, shared scrapbook for the people who make the story.</em></p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>⌘ &nbsp; Your family tree</h3>
+      <p>Map the people who matter most with profiles, birthdays, avatars, bios, and relationship connections that stay attached to the right tree handles.</p>
+      <sub><strong>Profiles · relationships · claims · saved positions</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>▧ &nbsp; Dynamic collections</h3>
+      <p>Turn important events into beautiful, collaborative photobooks. Add existing memories or upload several new photos with responsive previews.</p>
+      <sub><strong>Photobooks · covers · filters · multi-photo upload</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>✦ &nbsp; Memory bounties</h3>
+      <p>Ask the family for a missing moment, let someone submit photos, and celebrate when the gap in the story is filled.</p>
+      <sub><strong>Requests · submissions · fulfilment · optional photobooks</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>◎ &nbsp; Family world map</h3>
+      <p>See where your family memories were made, browse a country gallery, filter by year, and watch your shared world grow.</p>
+      <sub><strong>Country pins · photo galleries · year filters · explored stats</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>▣ &nbsp; Private family album</h3>
+      <p>Share photos in a calm, searchable feed with titles, years, tagged relatives, comments, locations, previews, and signed private image URLs.</p>
+      <sub><strong>RLS · private Storage · tagging · comments · location metadata</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>↗ &nbsp; Multiple family spaces</h3>
+      <p>Keep different circles separate while using one account. Switch between family spaces without crossing photos, people, comments, bounties, or tree data.</p>
+      <sub><strong>Family switching · invitations · roles · tenant isolation</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>♡ &nbsp; Thoughtful profile tools</h3>
+      <p>Give every person a place in the story, whether they have claimed their profile or are still a much-loved branch waiting to be added.</p>
+      <sub><strong>Profile claims · admin review · avatars · biographies</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>⌁ &nbsp; Built for every screen</h3>
+      <p>Use the album comfortably on phones, tablets, and desktops with touch-friendly controls, responsive photo bubbles, mobile navigation, and focused modal flows.</p>
+      <sub><strong>Responsive layouts · mobile navigation · accessible focus states</strong></sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center"><sub>The feature language above mirrors the landing experience in <code>src/components/FeaturesGrid.jsx</code>, including its green, peach, sand, and blue scrapbook accents.</sub></p>
+
 ## Tech stack
 
 | Layer | Technology |
@@ -208,4 +265,4 @@ Kinfolk is designed for a trusted, invite-only audience, not anonymous public sh
 
 ## License
 
-Add the project license here before publishing the repository publicly.
+License yet to be decided, for now all rights reserved
