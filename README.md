@@ -4,23 +4,31 @@
   <img src="./public/logo.svg" alt="Kinfolk" width="96" />
 </p>
 
-<p align="center"><strong>A private, whitelist-only family album for the moments worth keeping.</strong></p>
+<p align="center"><strong>A private family scrapbook for the moments worth keeping.</strong></p>
+
+<p align="center"><em>Gather the people. Keep the little things. Make room for the story.</em></p>
 
 <p align="center">
-  <a href="https://github.com/"><img src="https://img.shields.io/badge/runtime-Node%2022-3f5e4d?style=flat-square" alt="Node 22" /></a>
-  <a href="https://astro.build/"><img src="https://img.shields.io/badge/framework-Astro%207-f2eee6?style=flat-square&labelColor=312f29" alt="Astro 7" /></a>
-  <a href="https://supabase.com/"><img src="https://img.shields.io/badge/data-Supabase-6b8968?style=flat-square" alt="Supabase" /></a>
-  <a href="./Dockerfile"><img src="https://img.shields.io/badge/container-Docker-2496ED?style=flat-square" alt="Docker" /></a>
+  <a href="#local-development"><img src="https://img.shields.io/badge/runtime-Node%2022-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Node 22" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/framework-Astro%207-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Astro 7" /></a>
+  <a href="#database-at-a-glance"><img src="https://img.shields.io/badge/data-Supabase-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Supabase" /></a>
+  <a href="#production-pipeline"><img src="https://img.shields.io/badge/shipping-Docker%20%2B%20AWS-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Docker and AWS" /></a>
 </p>
 
-Kinfolk is a warm, modern digital scrapbook built for trusted family circles. Authenticated members can share private photos, tag relatives, build a family tree, curate photobooks, explore memories by country, and post memory bounties. Supabase Row Level Security (RLS) and private Storage signed URLs enforce the family boundary; the browser never receives a service-role credential.
+> Kinfolk is a warm, modern digital scrapbook for trusted family circles. It gives families one calm place to share private photos, tag relatives, build a family tree, curate photobooks, explore memories by country, and post memory bounties.
 
-## Product principles
+The app is deliberately small, private, and tactile: off-whites, soft sepias, forest-green accents, rounded cards, and generous space around the memories. Supabase Row Level Security (RLS) and private Storage signed URLs enforce the family boundary; the browser never receives a service-role credential.
+
+<p align="center"><sub>Built for the people who already know the story — and the ones still adding to it.</sub></p>
+
+## The Kinfolk approach
 
 - **Private by default:** membership and family selection are enforced in the database.
 - **Small moments first:** fast photo grids, responsive upload previews, and calm empty states.
 - **Safe collaboration:** admins manage invitations and profile claims; destructive actions are explicit.
 - **Deployable, observable foundations:** reproducible Node builds, a multi-stage container, and a migration-first release process.
+
+Feature updates are shaped and delivered through user stories: each change starts with a family need, defines the permission and UX boundary, and is validated through focused checks, mobile smoke tests, and the production pipeline. This keeps product decisions human while keeping implementation measurable.
 
 ## Tech stack
 
@@ -33,15 +41,6 @@ Kinfolk is a warm, modern digital scrapbook built for trusted family circles. Au
 | Media | Private Supabase Storage bucket with signed URLs and transformations |
 | Infrastructure | AWS CDK (`cdk/`), Docker, Node 22 Alpine |
 | Quality gates | `astro check`, production build, CDK Jest tests |
-
-## User stories
-
-- As an invited family member, I can sign in and only see the families I belong to.
-- As a member, I can upload a photo, preview it before saving, tag people, and add a title, year, and location.
-- As a member, I can switch family spaces without leaking photos, comments, profiles, or bounties between them.
-- As a member, I can browse memories, open a photo, leave a comment, and curate a photobook.
-- As an admin, I can invite people, review profile claims, and manage family membership.
-- As a family, we can preserve relationships in a visual family tree and find memories on a world map.
 
 ## Local development
 
