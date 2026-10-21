@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createSupabaseClient, getSupabaseErrorMessage, PHOTO_BUCKET } from '../lib/supabase';
 import type { CollectionRow, PhotoDocument, ProfileDocument } from '../types/database';
 import { getCountries } from '../lib/countries';
+import PhotoUploadPreview from './PhotoUploadPreview';
 
 type CollectionPhoto = { collection_id: string; photo_id: string };
 
@@ -28,7 +29,7 @@ export default function CollectionsPanel({
 	const [newTitle, setNewTitle] = useState('');
 	const [newDescription, setNewDescription] = useState('');
 	const [newCountry, setNewCountry] = useState('');
-	const [uploadFile, setUploadFile] = useState<File | null>(null);
+	const [uploadFiles, setUploadFiles] = useState<File[]>([]);
 	const [uploadTitle, setUploadTitle] = useState('');
 	const [uploadYear, setUploadYear] = useState(String(new Date().getFullYear()));
 	const [loading, setLoading] = useState(true);
@@ -137,36 +138,39 @@ export default function CollectionsPanel({
 	}
 
 	async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
-			event.preventDefault();
-			if (!collectionId || !activeCollection || !uploadFile) return;
-			setSaving(true);
-			setError('');
-			let filePath: string | null = null;
-			let uploaded = false;
-			let photoId: string | null = null;
-			let transactionComplete = false;
-			try {
-				const extensionByType: Record<string, string> = {
-					'image/jpeg': 'jpg',
-					'image/png': 'png',
-					'image/webp': 'webp',
-					'image/gif': 'gif',
-					'image/avif': 'avif',
-				};
-				const extension = extensionByType[uploadFile.type];
-				if (!extension) throw new Error('Choose a JPEG, PNG, WebP, GIF, or AVIF image.');
-				if (uploadFile.size > 50 * 1024 * 1024) throw new Error('Choose an image smaller than 50 MiB.');
-				const supabase = createSupabaseClient();
-				const { data: userData, error: userError } = await supabase.auth.getUser();
-				if (userError) throw userError;
-				if (!userData.user) throw new Error('Your session expired. Sign in again before uploading.');
-				filePath = `families/${familyId}/photos/${userData.user.id}/${crypto.randomUUID()}.${extension}`;
-				const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).upload(filePath, uploadFile, {
-					contentType: uploadFile.type,
+		event.preventDefault();
+		if (!collectionId || !activeCollection || !uploadFiles.length) return;
+		setSaving(true);
+		setError('');
+		const extensionByType: Record<string, string> = {
+			'image/jpeg': 'jpg',
+			'image/png': 'png',
+			'image/webp': 'webp',
+			'image/gif': 'gif',
+			'image/avif': 'avif',
+		};
+		const supabase = createSupabaseClient();
+		const uploadedPaths: string[] = [];
+		const photoIds: string[] = [];
+		try {
+			for (const file of uploadFiles) {
+				const extension = extensionByType[file.type];
+				if (!extension) throw new Error('Choose JPEG, PNG, WebP, GIF, or AVIF images only.');
+				if (file.size > 50 * 1024 * 1024) throw new Error(`"${file.name}" is larger than 50 MiB.`);
+			}
+			const { data: userData, error: userError } = await supabase.auth.getUser();
+			if (userError) throw userError;
+			if (!userData.user) throw new Error('Your session expired. Sign in again before uploading.');
+
+			for (const file of uploadFiles) {
+				const extension = extensionByType[file.type];
+				const filePath = `families/${familyId}/photos/${userData.user.id}/${crypto.randomUUID()}.${extension}`;
+				const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).upload(filePath, file, {
+					contentType: file.type,
 					upsert: false,
 				});
 				if (storageError) throw storageError;
-				uploaded = true;
+				uploadedPaths.push(filePath);
 				const { data: photo, error: photoError } = await supabase.from('photos').insert({
 					title: uploadTitle.trim() || null,
 					file_path: filePath,
@@ -176,54 +180,36 @@ export default function CollectionsPanel({
 					country_code: activeCollection.country_code,
 				}).select('*').single();
 				if (photoError) throw photoError;
-				photoId = photo.id;
+				photoIds.push(photo.id);
 				const { error: membershipError } = await supabase.from('collection_photos').insert({
 					collection_id: collectionId,
-					photo_id: photoId,
+					photo_id: photo.id,
 				});
 				if (membershipError) throw membershipError;
-				const { data: signedPhoto, error: signedUrlError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(filePath, 60 * 60);
-				if (signedUrlError) throw signedUrlError;
-				const newPhoto: PhotoDocument = {
-					$id: photo.id,
-					title: photo.title ?? undefined,
-					fileId: photo.file_path,
-					year: photo.year,
-					uploadedBy: photo.uploaded_by,
-					taggedProfiles: photo.tagged_profiles,
-					countryCode: photo.country_code ?? activeCollection.country_code ?? undefined,
-					imageUrl: signedPhoto.signedUrl,
-				};
-				setMemberships((current) => [...current, { collection_id: collectionId, photo_id: photoId as string }]);
-				setThumbnails((current) => ({ ...current, [newPhoto.$id]: signedPhoto.signedUrl }));
-				transactionComplete = true;
-				if (onPhotoAdded) await onPhotoAdded();
-				setUploadFile(null);
-				setUploadTitle('');
-				setUploadYear(String(new Date().getFullYear()));
-			} catch (uploadError) {
-				let message = getSupabaseErrorMessage(uploadError, 'Could not add the photo to this photobook.');
-				if (photoId && !transactionComplete) {
-					const { error: membershipCleanupError } = await createSupabaseClient()
-						.from('collection_photos')
-						.delete()
-						.eq('collection_id', collectionId)
-						.eq('photo_id', photoId);
-					if (membershipCleanupError) message += ` Cleanup failed: ${membershipCleanupError.message}`;
-					const { error: photoCleanupError } = await createSupabaseClient()
-						.from('photos')
-						.delete()
-						.eq('id', photoId);
-					if (photoCleanupError) message += ` Photo cleanup failed: ${photoCleanupError.message}`;
-				}
-				if (uploaded && filePath && !transactionComplete) {
-					const { error: storageCleanupError } = await createSupabaseClient().storage.from(PHOTO_BUCKET).remove([filePath]);
-					if (storageCleanupError) message += ` Storage cleanup failed: ${storageCleanupError.message}`;
-				}
-				setError(message);
-			} finally {
-				setSaving(false);
 			}
+			if (onPhotoAdded) await onPhotoAdded();
+			setUploadFiles([]);
+			setUploadTitle('');
+			setUploadYear(String(new Date().getFullYear()));
+		} catch (uploadError) {
+			let message = getSupabaseErrorMessage(uploadError, 'Could not add the photos to this photobook.');
+			if (photoIds.length) {
+				const { error: membershipCleanupError } = await supabase
+					.from('collection_photos')
+					.delete()
+					.in('photo_id', photoIds);
+				if (membershipCleanupError) message += ` Cleanup failed: ${membershipCleanupError.message}`;
+				const { error: photoCleanupError } = await supabase.from('photos').delete().in('id', photoIds);
+				if (photoCleanupError) message += ` Photo cleanup failed: ${photoCleanupError.message}`;
+			}
+			if (uploadedPaths.length) {
+				const { error: storageCleanupError } = await supabase.storage.from(PHOTO_BUCKET).remove(uploadedPaths);
+				if (storageCleanupError) message += ` Storage cleanup failed: ${storageCleanupError.message}`;
+			}
+			setError(message);
+		} finally {
+			setSaving(false);
+		}
 	}
 
 	async function removePhoto(photoId: string) {
@@ -369,10 +355,10 @@ export default function CollectionsPanel({
 					</div>
 					<form className="collection-upload" onSubmit={(event) => void uploadPhoto(event)}>
 						<div><p className="eyebrow">Add a new memory</p><h2>Upload directly to this photobook</h2><p className="muted">This photo will also appear in the family album and use {activeCollection.country_code ? 'this photobook’s country' : 'your default country'}.</p></div>
-						<label>Photo<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" required onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} /></label>
+						<label className="photo-upload-field">Photos<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" required onChange={(event) => setUploadFiles(Array.from(event.target.files ?? []))} /><PhotoUploadPreview files={uploadFiles} /></label>
 						<label>Title (optional)<input value={uploadTitle} onChange={(event) => setUploadTitle(event.target.value)} placeholder="A day to remember" /></label>
 						<label>Year<input type="number" min="1800" max={new Date().getFullYear()} value={uploadYear} onChange={(event) => setUploadYear(event.target.value)} required /></label>
-						<button className="button button-primary" type="submit" disabled={!uploadFile || saving}>{saving ? 'Uploading…' : 'Upload to photobook'}</button>
+						<button className="button button-primary" type="submit" disabled={!uploadFiles.length || saving}>{saving ? `Uploading ${uploadFiles.length} photos…` : `Upload ${uploadFiles.length || ''} photo${uploadFiles.length === 1 ? '' : 's'} to photobook`}</button>
 					</form>
 					{visiblePhotos.length ? <div className="photo-grid collection-photo-grid">
 						{visiblePhotos.map((photo) => (

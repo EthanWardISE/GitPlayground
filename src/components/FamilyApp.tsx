@@ -386,7 +386,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : view === 'map' ? 'Memory map' : view === 'settings' ? 'General settings' : 'The family album';
 
 	if (status === 'loading') {
-		return <main className="screen-state"><img className="loading-mark" src="/logo.svg" alt="" /><p>Gathering your family memories…</p></main>;
+		return <main className="screen-state"><img className="loading-logo" src="/logo.svg" alt="" /><p className="loading-message">Gathering your family memories…</p></main>;
 	}
 
 	if (status === 'setup') {
@@ -1198,6 +1198,18 @@ function UploadDialog({ profiles, familyId, onClose, onCreated }: { profiles: Pr
 	const [availableProfiles, setAvailableProfiles] = useState(profiles);
 	const [defaultCountry, setDefaultCountry] = useState('IE');
 	const [countryCode, setCountryCode] = useState<string | null>(null);
+	const [selectedFile, setSelectedFile] = useState<File | null>(null);
+	const [filePreview, setFilePreview] = useState('');
+
+	useEffect(() => {
+		if (!selectedFile) {
+			setFilePreview('');
+			return;
+		}
+		const previewUrl = URL.createObjectURL(selectedFile);
+		setFilePreview(previewUrl);
+		return () => URL.revokeObjectURL(previewUrl);
+	}, [selectedFile]);
 
 	useEffect(() => {
 		void createSupabaseClient().auth.getUser().then(async ({ data }) => {
@@ -1314,7 +1326,7 @@ function UploadDialog({ profiles, familyId, onClose, onCreated }: { profiles: Pr
 			<section className="modal-card upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-heading">
 				<header className="modal-header"><div><div className="eyebrow">Keep this one close</div><h2 id="upload-heading">Add a memory</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><AppIcon name="close" /></button></header>
 				<form className="upload-form" onSubmit={upload}>
-					<label>Choose a photo<input name="photo" type="file" accept="image/*" required /></label>
+					<label className="photo-upload-field">Choose a photo<input name="photo" type="file" accept="image/*" required onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />{filePreview && <span className="upload-preview-bubble"><img src={filePreview} alt="Selected memory preview" /><span>{selectedFile?.name}</span></span>}</label>
 					<div className="form-two"><label>Give it a little title<input name="title" placeholder="Sunday at grandma’s" /></label><label>What year was it?<input name="year" type="number" min="1800" max={new Date().getFullYear()} defaultValue={new Date().getFullYear()} required /></label></div>
 					<UploadCountrySelector defaultCountry={defaultCountry} value={countryCode} onChange={setCountryCode} />
 					<div className="tagging-block"><label htmlFor="profile-search">Who’s in this memory?</label><input id="profile-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search family members…" />{selectedIds.length > 0 && <div className="selected-tags">{selectedIds.map((id) => { const profile = availableProfiles.find((person) => person.$id === id); return profile ? <button type="button" className="tag-chip selected" key={id} onClick={() => setSelectedIds((current) => current.filter((item) => item !== id))}>{profile.name} <span>×</span></button> : null; })}</div>}<div className="profile-options">{filteredProfiles.map((profile) => <button type="button" className={`tag-chip ${selectedIds.includes(profile.$id) ? 'selected' : ''}`} key={profile.$id} onClick={() => setSelectedIds((current) => current.includes(profile.$id) ? current.filter((id) => id !== profile.$id) : [...current, profile.$id])}>{profile.name}</button>)}</div>{!filteredProfiles.length && search && <button className="text-link inline-link" type="button" onClick={() => { setNewProfileName(search); setCreatingProfile(true); }}>+ Add “{search}” as a new family member</button>}</div>

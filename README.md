@@ -1,325 +1,268 @@
-# Kinfolk — private family album
+# Kinfolk
 
-Kinfolk is an Astro server-rendered app with React islands and Supabase Auth, Postgres, and private Storage. The app uses the Supabase publishable key in the browser; Row Level Security (RLS) is what protects family data.
+<p align="center">
+  <img src="./public/logo.svg" alt="Kinfolk" width="96" />
+</p>
 
-## Run locally
+<p align="center"><strong>A private family scrapbook for the moments worth keeping.</strong></p>
 
-Use PowerShell from this project folder (`puffy-parsec`):
+<p align="center"><em>Gather the people. Keep the little things. Make room for the story.</em></p>
+
+<p align="center">
+  <a href="#local-development"><img src="https://img.shields.io/badge/runtime-Node%2022-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Node 22" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/framework-Astro%207-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Astro 7" /></a>
+  <a href="#database-at-a-glance"><img src="https://img.shields.io/badge/data-Supabase-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Supabase" /></a>
+  <a href="#production-pipeline"><img src="https://img.shields.io/badge/shipping-Docker%20%2B%20AWS-3f5e4d?style=flat-square&labelColor=f2eee6" alt="Docker and AWS" /></a>
+</p>
+
+> Kinfolk is a warm, modern digital scrapbook for trusted family circles. It gives families one calm place to share private photos, tag relatives, build a family tree, curate photobooks, explore memories by country, and post memory bounties.
+
+The app is deliberately small, private, and tactile: off-whites, soft sepias, forest-green accents, rounded cards, and generous space around the memories. Supabase Row Level Security (RLS) and private Storage signed URLs enforce the family boundary; the browser never receives a service-role credential.
+
+<p align="center"><sub>Built for the people who already know the story — and the ones still adding to it.</sub></p>
+
+## The Kinfolk approach
+
+- **Private by default:** membership and family selection are enforced in the database.
+- **Small moments first:** fast photo grids, responsive upload previews, and calm empty states.
+- **Safe collaboration:** admins manage invitations and profile claims; destructive actions are explicit.
+- **Deployable, observable foundations:** reproducible Node builds, a multi-stage container, and a migration-first release process.
+
+Feature updates are shaped and delivered through user stories: each change starts with a family need, defines the permission and UX boundary, and is validated through focused checks, mobile smoke tests, and the production pipeline. This keeps product decisions human while keeping implementation measurable.
+
+## Everything worth keeping
+
+<p align="center"><em>A private, shared scrapbook for the people who make the story.</em></p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>⌘ &nbsp; Your family tree</h3>
+      <p>Map the people who matter most with profiles, birthdays, avatars, bios, and relationship connections that stay attached to the right tree handles.</p>
+      <sub><strong>Profiles · relationships · claims · saved positions</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>▧ &nbsp; Dynamic collections</h3>
+      <p>Turn important events into beautiful, collaborative photobooks. Add existing memories or upload several new photos with responsive previews.</p>
+      <sub><strong>Photobooks · covers · filters · multi-photo upload</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>✦ &nbsp; Memory bounties</h3>
+      <p>Ask the family for a missing moment, let someone submit photos, and celebrate when the gap in the story is filled.</p>
+      <sub><strong>Requests · submissions · fulfilment · optional photobooks</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>◎ &nbsp; Family world map</h3>
+      <p>See where your family memories were made, browse a country gallery, filter by year, and watch your shared world grow.</p>
+      <sub><strong>Country pins · photo galleries · year filters · explored stats</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>▣ &nbsp; Private family album</h3>
+      <p>Share photos in a calm, searchable feed with titles, years, tagged relatives, comments, locations, previews, and signed private image URLs.</p>
+      <sub><strong>RLS · private Storage · tagging · comments · location metadata</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>↗ &nbsp; Multiple family spaces</h3>
+      <p>Keep different circles separate while using one account. Switch between family spaces without crossing photos, people, comments, bounties, or tree data.</p>
+      <sub><strong>Family switching · invitations · roles · tenant isolation</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>♡ &nbsp; Thoughtful profile tools</h3>
+      <p>Give every person a place in the story, whether they have claimed their profile or are still a much-loved branch waiting to be added.</p>
+      <sub><strong>Profile claims · admin review · avatars · biographies</strong></sub>
+    </td>
+    <td width="50%" valign="top">
+      <h3>⌁ &nbsp; Built for every screen</h3>
+      <p>Use the album comfortably on phones, tablets, and desktops with touch-friendly controls, responsive photo bubbles, mobile navigation, and focused modal flows.</p>
+      <sub><strong>Responsive layouts · mobile navigation · accessible focus states</strong></sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center"><sub>The feature language above mirrors the landing experience in <code>src/components/FeaturesGrid.jsx</code>, including its green, peach, sand, and blue scrapbook accents.</sub></p>
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| UI and server rendering | Astro 7, React islands, TypeScript |
+| Styling | Tailwind CSS 4 via Vite, shared Kinfolk CSS tokens |
+| Authentication and API | Supabase Auth, `@supabase/ssr`, Supabase JS |
+| Database | Supabase Postgres with RLS and timestamped SQL migrations |
+| Media | Private Supabase Storage bucket with signed URLs and transformations |
+| Infrastructure | AWS CDK (`cdk/`), Docker, Node 22 Alpine |
+| Quality gates | `astro check`, production build, CDK Jest tests |
+
+## Local development
+
+### Prerequisites
+
+- Node.js `>=22.12.0` and npm
+- A Supabase project
+- PowerShell, Bash, or a compatible terminal
+
+### 1. Install and configure
 
 ```powershell
+cd puffy-parsec
 Copy-Item .env.example .env
 npm install
-npm run dev
 ```
 
-Open the local URL Astro prints, normally `http://localhost:4321`. The home page shows a setup screen until the two Supabase values in `.env` have been filled in.
-
-## Create and configure your Supabase project
-
-### 1. Make a Supabase project
-
-1. Go to [supabase.com/dashboard](https://supabase.com/dashboard), sign in, and choose **New project**.
-2. Pick an organization, enter a project name such as `kinfolk-family`, choose a strong database password, select a nearby region, and create the project. Save the database password somewhere safe; this app does not need it.
-3. Wait for project setup to finish.
-4. In **Project Settings → API Keys** (or the project’s **Connect** dialog), copy the **Project URL** and the **publishable key** (`sb_publishable_...`). Do not use a secret key (`sb_secret_...`) or legacy `service_role` key in the website.
-5. Open **Authentication → URL Configuration**. Set the local **Site URL** to `http://localhost:4321` and add `http://localhost:4321/**` to the allowed **Redirect URLs**. Email confirmation sends the user back to the address passed by the app, and Supabase only redirects to URLs you allow.
-
-### 2. Create your local `.env`
-
-Copy the example file and put your actual project values into it:
-
-```powershell
-Copy-Item .env.example .env
-notepad .env
-```
-
-Fill in both values:
+Set the public browser configuration in `.env`:
 
 ```dotenv
 PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-project-publishable-key
+PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-project-key
 ```
 
-Use the exact URL and publishable key shown in your Supabase project. These variables start with `PUBLIC_` because the app uses the publishable key in the browser. That key is designed to be public; RLS policies protect the data. **Never put a Supabase secret/service-role key in `.env` under a `PUBLIC_` name, commit any real `.env` file, or expose a secret key in frontend code.** `.env` is ignored by Git.
+These values are intentionally public. Never use a Supabase secret/service-role key in a `PUBLIC_` variable or commit a real `.env` file.
 
-### 3. Create the tables, private photo bucket, and security policies
+### 2. Apply database migrations
 
-1. In the Supabase Dashboard, open **SQL Editor → New query**.
-2. In this project, open `supabase/migrations/20261007000000_family_album.sql` in your editor and copy all of it.
-3. Paste it into the Supabase SQL Editor and choose **Run**.
-4. Repeat with `supabase/migrations/20261020000000_owner_photo_deletion.sql` to apply photo ownership and deletion policies.
-5. Repeat with `supabase/migrations/20261021000000_people_tree_collections.sql` to add approved profile claims, flexible family relationships, saved tree layouts, and collaborative photobooks.
-6. Repeat with `supabase/migrations/20261022000000_standalone_profile_avatars.sql` to allow profile pictures to be uploaded separately from album photos.
-7. Repeat with `supabase/migrations/20261023000000_profile_avatar_storage_read.sql` to allow family members to display uploaded profile pictures.
-8. Repeat with `supabase/migrations/20261024000000_profile_and_photobook_management.sql` to enable authorized picture removal.
-9. Repeat with `supabase/migrations/20261025000000_profile_bios.sql` to enable bios on claimed profiles.
-10. Repeat with `supabase/migrations/20261026000000_relationship_handle_positions.sql` so family connections remain attached to the exact tree handles used to create them.
-11. Check the SQL Editor result for a success message. The scripts create tables, indexes, a private `family-photos` bucket with a 50 MiB per-file limit, and RLS policies. You do not need to create tables or a bucket manually.
+Run the files in `supabase/migrations/` in timestamp order using the Supabase SQL Editor or the Supabase CLI. The migrations create the schema, RLS policies, private `family-photos` bucket, storage policies, family tenancy, profiles, relationships, collections, comments, and bounties. Do not skip an earlier migration when provisioning a fresh project.
 
-The first script is for a fresh project; run the later scripts in timestamp order to update existing projects. Data access is restricted to authenticated users who have an entry in `family_members`. Storage is private: the app creates time-limited signed links for the photo grid rather than making family photos public. Avatar and photobook thumbnails use Supabase Storage image transformations; enable image transformations for your Supabase project.
+The current migration set includes:
 
-If Kinfolk reports that `profile_claim_requests` (or another people/tree/photobook table) is missing from the schema cache, the people/tree migration has not been applied to this Supabase project. Run `20261021000000_people_tree_collections.sql` in the SQL Editor, wait for it to finish, then refresh the app. If the migration just succeeded but the error persists, use **Project Settings → API → Reload schema cache** and refresh again.
+1. `20261007000000_family_album.sql` — initial album, membership, storage, and RLS.
+2. `20261020000000_owner_photo_deletion.sql` — ownership and deletion rules.
+3. `20261021000000_people_tree_collections.sql` — claims, relationships, tree layouts, and photobooks.
+4. `20261022000000_standalone_profile_avatars.sql` through `20261026000000_relationship_handle_positions.sql` — avatars, management, bios, and tree handles.
+5. `20261104000000_multi_family_tenancy.sql` and subsequent `20261104*.sql` migrations — isolated family spaces, bucket recovery, and family-scoped profile claims.
 
-If local development reports `Object not found` while the deployed AWS site works, check that the project URL and publishable key in the local `.env` match the Supabase project configured in the ECS task definition. Local and deployed environments can point to different Supabase projects, each with separate users, migrations, and Storage files. Do not share or commit the publishable key or any secret key when asking for help.
+For the CLI workflow:
 
-The people/tree migration transfers existing `parent_id1` and `parent_id2` links into `person_relationships`, then removes those legacy columns. Family admins should verify a claimant’s identity before approving profile claims; the UI does not independently verify identity.
+```powershell
+npx supabase link --project-ref <project-ref>
+npx supabase db push
+```
 
-Run `20261022000000_standalone_profile_avatars.sql` after the people/tree migration to allow profile pictures to be uploaded independently of album photos. Run `20261023000000_profile_avatar_storage_read.sql` afterward to let approved family members load those avatars from private Storage.
-
-Profile owners and family admins can delete profiles; only family admins can delete unclaimed ghost profiles. Family members can delete shared photobooks, but deleting one never removes photos from the family album.
-
-Run `20261025000000_profile_bios.sql` after the profile and photobook management migration. A claimed profile owner can add or edit their 1,000-character bio; it is visible to approved family members.
-
-### 4. Start the app and create your login
-
-From the `puffy-parsec` project folder:
+### 3. Run the app
 
 ```powershell
 npm run dev
 ```
 
-Open `http://localhost:4321`, choose **Create an account**, and register using your email, name, and a password of at least 8 characters.
+Open [http://localhost:4321](http://localhost:4321). Create an account, create a family or accept an invitation, then upload a memory. Set the Supabase Auth Site URL and local redirect URL to `http://localhost:4321` when email confirmation is enabled.
 
-If email confirmation is enabled for your Supabase project, confirm the message sent to your email, then sign in. If confirmation emails do not arrive during local testing, check the project’s **Authentication → Users** and **Authentication → SMTP/Email** settings. You may temporarily disable **Confirm email** in **Authentication → Providers → Email** for a private test project; turn it back on before inviting other people.
-
-Registration is open and does not require a whitelist. A new user who has not joined a family sees the family setup screen, where they can accept an invitation or create a new family immediately. Access to an existing family still requires an invitation from that family’s administrator.
-
-### Multiple family spaces
-
-Migration `20261104000000_multi_family_tenancy.sql` preserves the existing album as the first Kinfolk family and adds isolated family spaces. A signed-in user can create a family from the pending-access screen, accept an invitation link, and switch between families from the app navigation. Family membership, roles, profiles, photos, photobooks, tree data, claims, bounties, and comments are scoped to the selected family by database policies.
-
-Apply this migration after the existing migrations in timestamp order. It is data-preserving and does not delete existing profiles, photos, or memberships. Do not manually edit the migration or run it against a different project without first checking the project’s migration history.
-
-Migration `20261104010000_ensure_family_photos_bucket.sql` also restores the private `family-photos` bucket if it is missing. It is idempotent and does not delete or modify existing storage objects.
-
-### 5. Join or create a family
-
-For a fresh project, sign in to Kinfolk and use **Create a family** on the pending-access screen. You become that family’s administrator automatically.
-
-For an existing project, the migration preserves the original family and memberships. If the first administrator still needs to be added manually:
-
-1. In Supabase, open **Authentication → Users** and copy the account’s **User UID**.
-2. In **SQL Editor**, find the preserved family ID:
-
-```sql
-select id, name
-from public.families
-order by created_at, id
-limit 1;
-```
-
-3. Add the user to that family, replacing all example values:
-
-```sql
-insert into public.family_members (family_id, user_id, full_name, role)
-values ('PASTE-FAMILY-UUID-HERE', 'PASTE-USER-UUID-HERE', 'Your Name', 'admin');
-```
-
-4. Refresh Kinfolk or sign out and sign back in. To add relatives, use **Manage family → Create invite link** from the app rather than inserting memberships manually.
-
-Only invite people you trust: a family member can see the active family’s album and data. Membership inserts remain server-controlled; users can create their own new family but cannot add themselves to an existing family without an invitation.
-
-### 6. Try the album
-
-- **Add a memory:** upload an image, choose a year, and tag family profiles. If a tagged person has not been added before, create their profile directly from the tagging form.
-- **Filter memories:** use the year dropdown and people filter.
-- **Open a photo:** select a card to read and add comments. Delete posts you uploaded from the photo detail view; Kinfolk asks for confirmation first.
-- **Explore the family tree:** open `/tree`, add person profiles with or without a photo, drag the side dots between profiles to add a sibling link, use the top/bottom dots for parent, step-parent, guardian, or spouse links, and drag nodes to save the shared layout. Add a full birth date when you know it; the tree calculates age from that date.
-- **Claim a person profile:** open their profile page and request a claim. A family admin reviews and approves it before the account is linked.
-- **Set a profile picture:** open a person’s profile and either crop a photo you uploaded that tags them, or upload a separate image directly. The avatar upload does not add a photo to the family album.
-- **Create a photobook:** open `/collections`, create a named collection, then add shared family-album photos. Set a cover image and filter that collection by tagged people.
-- **Open a person:** select a name in the tree or family list to see photos tagged with that person at `/person/<profile-id>`.
-- **Add your bio:** after an admin approves your profile claim, open your profile and add a short introduction for the family.
-
-The database names use snake_case: for example, a photo record stores `file_path`, `uploaded_by`, and `tagged_profiles`. Photos are private Storage objects in `family-photos`; the `file_path` in `photos` is the object path, not a public URL.
-
-## Launch on Amazon ECS
-
-This project runs as a Node.js server in an Amazon ECS Fargate container. GitHub Actions builds the container, pushes it to Amazon ECR, and tells ECS to start it. Supabase settings are added to the **ECS task definition when GitHub Actions deploys**. They are not baked into the image and are not read from a file inside the container.
-
-The Supabase URL and publishable key are designed to be public in a website. Use only the Supabase **publishable** key (`sb_publishable_...`), never a `sb_secret_...` or `service_role` key. The app sends the two public values to the browser through `/api/runtime-config`; that endpoint is not cached.
-
-**AWS charges for the running Fargate task and load balancer.** Check current prices for your region and delete the ECS service, load balancer, and other resources when you no longer need them.
-
-### Part A — Make an empty place for the app in AWS
-
-Use one AWS region for every step. These instructions use `eu-north-1`; choose another region if you prefer, but use it everywhere, including GitHub.
-
-1. **Make an ECR image repository.**
-   - Open **Amazon ECR → Private registry → Repositories → Create repository**.
-   - Choose **Private**, enter `kinfolk-family-app`, and create it.
-   - ECR is the shelf where GitHub will put the app’s container image.
-
-2. **Make an ECS cluster.**
-   - Open **Amazon ECS → Clusters → Create cluster**.
-   - Name it `kinfolk-cluster`, select the AWS Fargate/serverless option, and create it.
-
-3. **Make a temporary task definition.**
-   - In **Task definitions → Create new task definition**, choose **Fargate**, Linux, and `x86_64`.
-   - Name the task family `kinfolk-task`. Choose `0.5 vCPU` and `1 GB` memory.
-   - For the **task execution role**, create or select `ecsTaskExecutionRole`. It needs the AWS-managed `AmazonECSTaskExecutionRolePolicy` so ECS can download images and write logs. The app does not need a task role.
-   - Add one container. Set its name to `kinfolk`, its image to `public.ecr.aws/docker/library/nginx:alpine`, and its container port to `80` using TCP. Turn on the `awslogs` log option if the wizard offers it.
-   - Save the task definition. Nginx is only a temporary starter image; the first GitHub deployment replaces it with Kinfolk.
-
-4. **Make the ECS service and its web address.**
-   - Open `kinfolk-cluster` and choose **Create service**. Use the Fargate launch type, task family `kinfolk-task`, service name `kinfolk-service`, and desired task count `1`.
-   - In the networking section, choose a VPC with public subnets. Turn on **Auto-assign public IP** so the first task can download its image.
-   - In load balancing, create an **internet-facing Application Load Balancer** with an HTTP listener on port `80`. Forward it to the `kinfolk` container on port `80`, and create a target group that uses **IP** targets and checks the path `/`.
-   - Let the wizard create security groups if you are not sure what to choose. The load balancer must accept web traffic on port `80`; the task should accept port `80` from the load balancer.
-   - Create the service and wait until its temporary Nginx page is healthy. Copy the load balancer’s **DNS name** from **EC2 → Load Balancers**. It is the temporary web address for Kinfolk too; write it as `http://<DNS-name>` (include `http://`).
-
-### Part B — Let GitHub deploy safely
-
-GitHub uses AWS **OpenID Connect (OIDC)**. This lets GitHub request short-lived AWS access when a deployment runs; you do not need to save permanent AWS access keys in GitHub.
-
-5. **Create the AWS GitHub identity provider (once per AWS account).**
-   - Open **IAM → Identity providers → Add provider**.
-   - Provider type: **OpenID Connect**. Provider URL: `https://token.actions.githubusercontent.com`. Audience: `sts.amazonaws.com`.
-
-6. **Create a role for this repository’s GitHub workflow.**
-   - In **IAM → Roles → Create role**, choose **Web identity**, select the provider you just added, and choose audience `sts.amazonaws.com`.
-   - Restrict the role to your repository and the `main` branch. The trust relationship should look like this; replace `YOUR-OWNER` and `YOUR-REPOSITORY` with the GitHub owner and repository name:
-
-     ```json
-     {
-       "Version": "2012-10-17",
-       "Statement": [{
-         "Effect": "Allow",
-         "Principal": {
-           "Federated": "arn:aws:iam::YOUR-ACCOUNT-ID:oidc-provider/token.actions.githubusercontent.com"
-         },
-         "Action": "sts:AssumeRoleWithWebIdentity",
-         "Condition": {
-           "StringEquals": {
-             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-             "token.actions.githubusercontent.com:sub": "repo:YOUR-OWNER/YOUR-REPOSITORY:ref:refs/heads/main"
-           }
-         }
-       }]
-     }
-     ```
-
-   - Attach an inline permissions policy like this. Replace the account ID and region. If the ECS wizard gave the task execution role a different name, use that role’s ARN on the `iam:PassRole` line.
-
-     ```json
-     {
-       "Version": "2012-10-17",
-       "Statement": [
-         {
-           "Effect": "Allow",
-           "Action": "ecr:GetAuthorizationToken",
-           "Resource": "*"
-         },
-         {
-           "Effect": "Allow",
-           "Action": [
-             "ecr:BatchCheckLayerAvailability",
-             "ecr:CompleteLayerUpload",
-             "ecr:InitiateLayerUpload",
-             "ecr:PutImage",
-             "ecr:UploadLayerPart"
-           ],
-           "Resource": "arn:aws:ecr:YOUR-REGION:YOUR-ACCOUNT-ID:repository/kinfolk-family-app"
-         },
-         {
-           "Effect": "Allow",
-           "Action": [
-             "ecs:DescribeServices",
-             "ecs:DescribeTaskDefinition"
-           ],
-           "Resource": "*"
-         },
-         {
-           "Effect": "Allow",
-           "Action": [
-             "ecs:RegisterTaskDefinition"
-           ],
-           "Resource": "*"
-         },
-         {
-           "Effect": "Allow",
-           "Action": "ecs:UpdateService",
-           "Resource": "arn:aws:ecs:YOUR-REGION:YOUR-ACCOUNT-ID:service/kinfolk-cluster/kinfolk-service"
-         },
-         {
-           "Effect": "Allow",
-           "Action": "iam:PassRole",
-           "Resource": "arn:aws:iam::YOUR-ACCOUNT-ID:role/ecsTaskExecutionRole",
-           "Condition": {
-             "StringEquals": {
-               "iam:PassedToService": "ecs-tasks.amazonaws.com"
-             }
-           }
-         }
-       ]
-     }
-     ```
-
-   - Save the role and copy its ARN. The GitHub workflow uses this role to push an image and update this one ECS service.
-
-7. **Give the GitHub repository its settings.**
-   - In GitHub, open the repository’s **Settings → Secrets and variables → Actions**.
-   - Add these **variables**:
-
-     | Variable | Value |
-     | --- | --- |
-     | `AWS_REGION` | The region from Part A, for example `eu-north-1` |
-     | `AWS_ROLE_TO_ASSUME` | The full ARN of the IAM role from step 6 |
-     | `ECR_REPOSITORY` | `kinfolk-family-app` |
-     | `ECS_CLUSTER` | `kinfolk-cluster` |
-     | `ECS_SERVICE` | `kinfolk-service` |
-     | `ECS_CONTAINER_NAME` | `kinfolk` |
-     | `SITE_URL` | The load balancer address from step 4, starting with `http://` |
-
-   - Add these **secrets**:
-
-     | Secret | Value |
-     | --- | --- |
-     | `PUBLIC_SUPABASE_URL` | Your Supabase Project URL, such as `https://example.supabase.co` |
-     | `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Your Supabase publishable key beginning `sb_publishable_` |
-
-   - The last two are public website settings, not Supabase admin passwords. The workflow copies them into the ECS task definition as runtime environment variables and starts a new task. It deliberately does **not** pass them to `docker build`. Each future deployment repeats this update, so the running task gets the current GitHub secret values.
-
-8. **Launch Kinfolk.**
-   - Make sure your changes are pushed to the repository’s `main` branch. Or open **Actions → Deploy Kinfolk to ECS → Run workflow** and select `main`.
-   - The workflow builds and uploads the image, registers a new ECS task definition containing the two Supabase settings, and updates the ECS service.
-   - Wait for the workflow to turn green. Open the load balancer address from step 4. The temporary Nginx page should now be Kinfolk.
-   - If the workflow is red, open it and read the failed step. A missing setting usually means a GitHub variable or secret name was typed differently. An `AccessDenied` message usually means the role policy or its repository/branch trust condition does not match.
-
-9. **Tell Supabase about the new address.**
-   - In Supabase, open **Authentication → URL Configuration**.
-   - Set the Site URL to your app address and add that address plus `/**` to the Redirect URLs. For the temporary load balancer address, use the same `http://...` address you put in `SITE_URL`.
-   - For family use, attach your own domain and HTTPS certificate to the load balancer. Then change `SITE_URL` and the Supabase Site URL/Redirect URLs to the `https://` domain and run a new deployment.
-   - Create your login and approve your first family admin using the earlier Supabase steps in this README.
-
-**Important:** Do not upload `.env` to AWS, commit it, or expect it to be copied into the container. The Docker build excludes `.env`; ECS environment variables are created by the GitHub deployment workflow. The two Supabase values must exist as GitHub Actions secrets for each deployment. They are public client settings; never substitute a Supabase secret/service-role key.
-
-### Check locally
-
-From the `puffy-parsec` project folder:
+## Commands
 
 ```powershell
-npm run check
-npm run build
-npm start
+npm run dev       # Start Astro development server
+npm run check     # Type-check Astro, React, and generated routes
+npm run build     # Create the production server bundle
+npm run preview   # Preview the production bundle locally
+npm run start     # Run dist/server/entry.mjs
 ```
 
-For local development, `npm run dev` reads the two values from your ignored `.env` file. The production image uses Astro’s standalone Node adapter, listens on `0.0.0.0`, and uses port `80` in ECS. The task definition and load balancer must both use the same port.
+`npm run check` is the smallest quality gate for application changes. Run `npm run build` before creating a deployment artifact.
 
-## Project structure
+## Production pipeline
 
-- `src/pages/index.astro` — album entry point.
-- `src/pages/tree.astro` — family tree.
-- `src/pages/person/[id].astro` — family member and tagged memories.
-- `src/components/FamilyApp.tsx` — React UI and Supabase operations.
-- `src/lib/supabase.ts` — typed browser client and configuration.
-- `src/types/database.ts` — TypeScript database interfaces.
-- `supabase/migrations/20261007000000_family_album.sql` — tables, indexes, bucket, and access policies.
+1. **Validate:** install from the lockfile, run `npm run check`, and run the CDK test suite in `cdk/`.
+2. **Build:** `npm run build` creates an Astro Node standalone server in `dist/`.
+3. **Package:** the multi-stage [Dockerfile](./Dockerfile) builds with Node 22, then copies only the production bundle and dependencies into a small Alpine runtime.
+4. **Provision:** AWS CDK in `cdk/` defines the static asset/deployment infrastructure. Keep environment-specific Supabase values in deployment secrets or task configuration, not in Git.
+5. **Migrate:** apply Supabase migrations in order before switching traffic to an application that depends on a new schema.
+6. **Release:** deploy the immutable image, set `HOST=0.0.0.0`, `PORT=80`, and `SITE_URL`, then run a smoke test against the health/app URL.
+7. **Observe and recover:** inspect application, Supabase Auth, Postgres, and Storage logs. Roll back the image first; roll forward database changes with a new migration rather than editing history.
 
-## Supabase references
+The GitHub Actions workflow in `.github/workflows/deploy.yml` is the reference CI/CD entry point. Pin credentials in GitHub/AWS secret stores and keep production Supabase projects separate from local development projects.
 
-- [Supabase Astro SSR and client setup](https://supabase.com/docs/guides/auth/server-side/creating-a-client?framework=astro)
-- [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys)
-- [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [Storage access control](https://supabase.com/docs/guides/storage/security/access-control)
-- [Supabase Auth — password-based sign-in](https://supabase.com/docs/guides/auth/passwords)
+### Docker
+
+```powershell
+docker build --build-arg SITE_URL=https://kinfolk.example.com -t kinfolk .
+docker run --rm -p 4321:80 `
+  -e PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co `
+  -e PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-project-key `
+  -e SITE_URL=https://kinfolk.example.com kinfolk
+```
+
+The image listens on port `80`; the example maps it to local port `4321`.
+
+## Database at a glance
+
+The exact source of truth is `supabase/migrations/`. At a conceptual level:
+
+```text
+auth.users ──< family_members >── families
+families ──< profiles
+families ──< photos ──< comments
+photos >──< profiles       (tagged_profiles)
+families ──< collections ──< collection_photos >── photos
+families ──< bounties ──< bounty_submissions >── photos
+profiles ──< person_relationships >── profiles
+profiles ──< profile_claim_requests
+```
+
+- **Users:** Supabase Auth owns identities; `family_members` grants family-scoped access and roles.
+- **Families:** tenancy boundary for all album data. The selected family is stored server-side and switched through an RPC.
+- **Profiles:** family people, optional claimed `auth.users` owner, avatar, biography, and tree relationships.
+- **Photos:** metadata and private Storage `file_path`; signed URLs are generated only after an RLS-authorized query.
+- **Bounties:** requests for missing memories, with submissions linking found photos back to the request.
+- **Collections and comments:** collaborative photobooks and conversation attached to family photos.
+
+RLS policies should be treated as production code. Test membership, admin, owner, and cross-family access whenever a migration changes a table or RPC.
+
+## Testing and release checklist
+
+- [ ] `npm ci` succeeds from a clean checkout.
+- [ ] `npm run check` passes without TypeScript or Astro diagnostics.
+- [ ] `npm run build` completes with the intended `SITE_URL`.
+- [ ] CDK unit tests pass from `cdk/` (`npm test`).
+- [ ] Fresh Supabase migrations apply in order.
+- [ ] Signed-out users cannot access album data.
+- [ ] A member of family A cannot read or mutate family B data.
+- [ ] Upload failure removes an orphaned Storage object where possible.
+- [ ] Mobile smoke test covers family switching, upload preview, photo grid, tree, and modal scrolling.
+- [ ] No `.env`, Supabase secret key, or AWS credential is included in the image or repository.
+
+## React keys and Astro hydration checklist
+
+- [ ] Give every mapped sibling a stable domain ID (`photo.id`, `profile.id`), never an array index when items can be inserted, removed, or reordered.
+- [ ] Put `key` on the component returned directly by `.map()`, not on a wrapper inside that component.
+- [ ] Do not concatenate mutable display text into a key; names and titles can change.
+- [ ] Render browser-only values (dates, `window`, object URLs) after hydration or behind a client effect.
+- [ ] Use the smallest Astro client directive that matches the interaction: `client:load` for immediately interactive UI, `client:visible` for below-the-fold widgets, and `client:idle` for non-critical controls.
+- [ ] Keep server props serializable and deterministic. Do not pass `File`, `URL`, Supabase clients, or functions through an Astro island boundary.
+- [ ] If markup genuinely differs between server and browser, isolate it in a client component and render a stable loading placeholder first.
+
+```tsx
+// Stable key: the database ID survives sorting and filtering.
+{photos.map((photo) => <PhotoCard key={photo.$id} photo={photo} />)}
+```
+
+```astro
+---
+import FamilyApp from '../components/FamilyApp';
+---
+<!-- The island owns browser-only auth and Storage work. -->
+<FamilyApp client:load />
+```
+
+## Repository map
+
+```text
+src/components/     React and Astro UI components
+src/lib/             Supabase and domain helpers
+src/pages/           Astro routes and server endpoints
+src/styles/          Kinfolk design tokens and family app styles
+supabase/migrations/ Database schema, RLS, RPCs, and storage policies
+cdk/                 AWS infrastructure and infrastructure tests
+.github/workflows/   CI/CD automation
+```
+
+## Security notes
+
+Kinfolk is designed for a trusted, invite-only audience, not anonymous public sharing. Keep RLS enabled, use private Storage, rotate leaked keys immediately, and review profile claims before approving them. Report security issues privately to the project maintainers rather than opening a public issue with sensitive details.
+
+## License
+
+License yet to be decided, for now all rights reserved
