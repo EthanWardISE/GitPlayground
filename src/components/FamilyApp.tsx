@@ -542,6 +542,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 							<div><div className="eyebrow">Make Kinfolk feel like yours</div><h1>General settings</h1><p className="muted">Manage your family album preferences.</p></div>
 						</div>
 						<FamilyManagement familyId={activeFamilyId} isAdmin={isAdmin} />
+						{isAdmin && <ClaimRequestsPanel familyId={activeFamilyId} profiles={profiles} onReviewed={loadFamilyData} />}
 						<section className="family-management">
 							<div className="eyebrow">Another space</div>
 							<h2>Create a new family</h2>
@@ -616,7 +617,6 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 			{showCreateProfile && <CreatePersonDialog onClose={() => setShowCreateProfile(false)} onCreated={(profileId) => {
 				window.location.assign(`/person/${profileId}`);
 			}} />}
-			{isAdmin && <ClaimRequestsPanel profiles={profiles} onReviewed={loadFamilyData} />}
 			{selectedPhoto && <PhotoDialog photo={selectedPhoto} profiles={profiles} user={user} onClose={() => setSelectedPhoto(null)} onDeleted={(photoId) => {
 				setPhotos((current) => current.filter((photo) => photo.$id !== photoId));
 				setSelectedPhoto((current) => current?.$id === photoId ? null : current);
@@ -997,7 +997,7 @@ function ProfileActions({ profile, photos, userId, familyId, isAdmin, alreadyLin
 	);
 }
 
-function ClaimRequestsPanel({ profiles, onReviewed }: { profiles: ProfileDocument[]; onReviewed: () => Promise<void> }) {
+function ClaimRequestsPanel({ familyId, profiles, onReviewed }: { familyId: string; profiles: ProfileDocument[]; onReviewed: () => Promise<void> }) {
 	const [requests, setRequests] = useState<ProfileClaimRequestRow[]>([]);
 	const [names, setNames] = useState<Record<string, string>>({});
 	const [error, setError] = useState('');
@@ -1011,6 +1011,7 @@ function ClaimRequestsPanel({ profiles, onReviewed }: { profiles: ProfileDocumen
 				const { data, error: requestError } = await supabase
 					.from('profile_claim_requests')
 					.select('*')
+					.eq('family_id', familyId)
 					.eq('status', 'pending')
 					.order('created_at');
 				if (requestError) throw requestError;
@@ -1034,7 +1035,7 @@ function ClaimRequestsPanel({ profiles, onReviewed }: { profiles: ProfileDocumen
 		}
 		void loadRequests();
 		return () => { cancelled = true; };
-	}, []);
+	}, [familyId]);
 
 	async function review(requestId: string, approve: boolean) {
 		setBusyId(requestId);
