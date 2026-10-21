@@ -74,15 +74,44 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .eyebrow { color: #818075; font-size: 10px; font-weight: 700; letter-spacing: 1.65px; text-transform: uppercase; }
 .muted { color: var(--muted); }
 .button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 9px; padding: 0 17px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 700; transition: background .18s ease, transform .18s ease; }
-.button:hover:not(:disabled) { transform: translateY(-1px); }
+.button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 18px #312f2914; }
+.button:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 .button:disabled { opacity: .65; cursor: not-allowed; }
 .button-primary { background: var(--green); color: #fff; box-shadow: 0 3px 8px #425f481c; }
 .button-primary:hover:not(:disabled) { background: var(--green-dark); }
 .button-small { min-height: 38px; padding: 0 13px; }
 .button-wide { width: 100%; min-height: 48px; margin-top: 3px; }
 .button-quiet { border-color: #e8e6df; background: transparent; }
+.button-quiet:hover:not(:disabled) { border-color: #bdcdb6; background: #f5f7f1; color: var(--green-dark); }
 .button-danger { border-color: #edd8d3; background: #fff8f6; color: #a84435; }
 .button-danger:hover:not(:disabled) { background: #fdf0ed; }
+.skeleton-screen { min-height: 100vh; padding: 32px clamp(20px, 6vw, 72px); background: var(--cream); }
+.skeleton-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 42px; color: var(--muted); font-size: 13px; }
+.skeleton-brand img { width: 34px; height: 34px; }
+.skeleton-page { max-width: 1180px; margin: 0 auto; }
+.skeleton-block { display: block; background: linear-gradient(100deg, #ebe8df 20%, #f7f5ef 40%, #ebe8df 60%); background-size: 200% 100%; animation: skeleton-shimmer 1.5s ease-in-out infinite; }
+.skeleton-heading { width: min(360px, 65%); height: 38px; border-radius: 9px; }
+.skeleton-subheading { width: min(520px, 80%); height: 16px; margin-top: 14px; border-radius: 6px; }
+.skeleton-profile-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 34px 0; }
+.skeleton-profile-card { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: #fffefa; }
+.skeleton-avatar { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 50%; }
+.skeleton-title { width: 92px; height: 12px; border-radius: 5px; }
+.skeleton-caption { width: 64px; height: 9px; margin-top: 8px; border-radius: 4px; }
+.skeleton-grid { margin-top: 0; }
+.skeleton-photo-card { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #fffefa; }
+.skeleton-photo-image { width: 100%; aspect-ratio: 1.15; }
+.skeleton-photo-copy { display: block; padding: 13px; }
+@keyframes skeleton-shimmer { to { background-position: -200% 0; } }
+.photo-upload-field { display: grid; gap: 9px; }
+.upload-preview-bubble { display: inline-flex; width: fit-content; max-width: 100%; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border: 1px solid #dce5d7; border-radius: 999px; background: #f5f8f1; color: var(--green-dark); font-size: 11px; font-weight: 700; }
+.upload-preview-bubble img { width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
+.upload-preview-bubble span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-preview-list { display: flex; max-width: 100%; flex-wrap: wrap; gap: 8px; }
+.collection-upload .upload-preview-list { grid-column: 1 / -1; }
+@media (max-width: 560px) {
+	.collection-upload .upload-preview-list { grid-column: auto; }
+	.collection-upload .upload-preview-bubble { max-width: 100%; }
+}
 .text-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--green-dark); cursor: pointer; font-size: 13px; font-weight: 700; }
 .form-error { margin: 0; color: #a84435; font-size: 13px; }
 .form-notice { margin: 0; color: #597a5e; font-size: 12px; }
@@ -132,6 +161,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .screen-state h1 { margin: 13px 0 8px; font-family: var(--serif); font-size: 42px; font-weight: 400; letter-spacing: -1px; line-height: 1.15; }
 .screen-state > p { max-width: 430px; margin: 8px 0 22px; }
 .screen-state > .form-error { max-width: 560px; margin-bottom: 22px; }
+.loading-logo { display: block; width: 42px; height: 42px; margin-bottom: 14px; }
+.loading-message { margin: 0; color: var(--muted); font-size: 14px; }
 .loading-mark { display: block; width: 46px; height: 46px; border-radius: 16px 16px 16px 5px; }
 .pending-icon { display: grid; width: 54px; height: 54px; place-items: center; margin-bottom: 20px; border-radius: 50%; background: #eeefe7; color: #667e62; }
 
@@ -141,7 +172,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sidebar .brand { padding: 0 8px; }
 .family-switcher { display: grid; gap: 5px; margin: 20px 8px 0; color: #aaa79d; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
 .family-switcher select { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid #e7e5de; border-radius: 8px; background: #fffefa; color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
-.topbar .family-switcher { display: flex; align-items: center; margin: 0; }
+.topbar .family-switcher { display: none; align-items: center; margin: 0; }
 .topbar .family-switcher span { display: none; }
 .topbar .family-switcher select { max-width: 170px; }
 .family-create-form { display: grid; width: min(360px, 100%); gap: 12px; margin: 20px 0 18px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #fffefa; text-align: left; }
@@ -437,6 +468,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (max-width: 1050px) {
 	.page-body { padding-right: 28px; padding-left: 28px; }
+	.sidebar > .family-switcher { display: none; }
+	.topbar .family-switcher { display: flex; min-width: 0; }
+	.topbar .family-switcher select { max-width: min(42vw, 170px); height: 44px; }
+	.skeleton-profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.topbar { padding-right: 28px; padding-left: 28px; }
 	.photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.welcome-banner { padding-left: 30px; }

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { createBountyPhotobook, resolveBounty, submitExistingPhotos, uploadAndSubmitPhotos, type Bounty } from '../lib/bounties';
 import { getSupabaseErrorMessage } from '../lib/supabase';
 import type { PhotoDocument } from '../types/database';
+import PhotoUploadPreview from './PhotoUploadPreview';
 
 export default function FulfillBountyModal({ bounty, photos, userId, familyId, onClose, onSubmitted }: {
 	bounty: Bounty;
@@ -56,7 +57,7 @@ export default function FulfillBountyModal({ bounty, photos, userId, familyId, o
 								{photos.filter((photo) => photo.uploadedBy === userId).map((photo) => <option key={photo.$id} value={photo.$id}>{photo.title || `Memory from ${photo.year}`}</option>)}
 							</select>
 						</label>
-					) : <><label>Choose one or more images<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} required /></label><div className="form-two"><label>Title (optional)<input name="title" placeholder="The kitchen, mid-renovation" /></label><label>Year<input name="year" type="number" min="1800" max={new Date().getFullYear()} defaultValue={new Date().getFullYear()} required /></label></div></>}
+					) : <><label className="photo-upload-field">Choose one or more images<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} required /><PhotoUploadPreview files={files} /></label><div className="form-two"><label>Title (optional)<input name="title" placeholder="The kitchen, mid-renovation" /></label><label>Year<input name="year" type="number" min="1800" max={new Date().getFullYear()} defaultValue={new Date().getFullYear()} required /></label></div></>}
 					<label className={`photobook-option ${photobook ? 'selected' : ''}`}>
 						<input type="checkbox" checked={photobook} onChange={(event) => setPhotobook(event.target.checked)} />
 						<span className="photobook-icon" aria-hidden="true">▤</span>
