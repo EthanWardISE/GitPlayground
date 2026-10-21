@@ -34,7 +34,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-controls { display: flex; gap: 6px; padding: 7px; border: 1px solid var(--line); border-radius: 11px; background: #fffefa; }
 .map-controls button { min-width: 35px; height: 32px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
 .map-controls button:hover { background: #f0eee7; }
-.map-stage { min-height: 520px; overflow: hidden; touch-action: none; border: 1px solid #ebe8de; border-radius: 20px; background: #fbf9f5; }
+.map-stage { height: clamp(360px, 62svh, 540px); overflow: hidden; touch-action: none; border: 1px solid #ebe8de; border-radius: 20px; background: #fbf9f5; }
 .map-stage svg { display: block; width: 100%; height: 100%; }
 .map-country { fill: #e8e2d5; stroke: #fbf9f5; stroke-width: .7; outline: none; transition: fill .18s ease; }
 .map-country:hover, .map-country.active:hover { fill: #c29b69; cursor: pointer; }
@@ -66,7 +66,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .country-dropdown label, .country-dropdown > label { color: #57564f; font-size: 12px; font-weight: 700; }
 .upload-location .country-dropdown { margin: 2px 0 0 18px; padding: 13px 14px; border-left: 2px solid #b7c8ae; border-radius: 0 9px 9px 0; background: #f7f8f2; }
 .upload-location .country-dropdown select { background: #fffefa; }
-@media (max-width: 720px) { .map-page { padding: 24px 18px 40px; } .map-heading { flex-direction: column; } .map-heading-side { width: 100%; justify-content: space-between; } .map-heading h1 { font-size: 34px; } .map-stage { min-height: 360px; } }
+@media (max-width: 720px) { .map-page { padding: 24px 18px 40px; } .map-heading { flex-direction: column; } .map-heading-side { width: 100%; justify-content: space-between; } .map-heading h1 { font-size: 34px; } .map-stage { height: min(62svh, 540px); } }
 
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-family: var(--serif); font-size: 25px; font-weight: 700; letter-spacing: -.9px; }
 .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 12px 12px 12px 4px; background: #6b8968; color: white; font-family: var(--serif); font-size: 22px; font-style: italic; line-height: 1; }
@@ -466,7 +466,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 	.explored-stat { text-align: left; }
 	.map-controls { width: 100%; justify-content: space-between; }
 	.map-controls button { min-width: 44px; min-height: 44px; }
-	.map-stage { min-height: min(62svh, 540px); border-radius: 15px; }
+	.map-stage { height: min(62svh, 540px); border-radius: 15px; }
 	.banner-note { font-size: 7px; }
 	.feed-header { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
 	.feed-header h2 { font-size: 24px; }
