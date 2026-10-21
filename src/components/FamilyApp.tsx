@@ -325,14 +325,14 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : view === 'map' ? 'Memory map' : view === 'settings' ? 'General settings' : 'The family album';
 
 	if (status === 'loading') {
-		return <main className="screen-state"><div className="loading-mark">k</div><p>Gathering your family memories…</p></main>;
+		return <main className="screen-state"><img className="loading-mark" src="/logo.svg" alt="" /><p>Gathering your family memories…</p></main>;
 	}
 
 	if (status === 'setup') {
 		return (
 			<main className="setup-screen">
 				<div className="setup-card">
-					<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
+					<a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
 					<div className="eyebrow">A little place for your people</div>
 					<h1>Your family stories<br />belong together.</h1>
 					<p className="setup-copy">Connect this app to your private Supabase project to open your family album.</p>
@@ -350,7 +350,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		return (
 			<main className="auth-screen">
 				<section className="auth-story">
-					<a className="brand brand-light" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
+					<a className="brand brand-light" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
 					<div className="story-content">
 						<div className="eyebrow eyebrow-light">A little place for your people</div>
 						<h1>Every family<br />has a story.</h1>
@@ -364,7 +364,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				</section>
 				<section className="auth-form-panel">
 					<div className="auth-form-wrap">
-						<div className="mobile-brand"><a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a></div>
+						<div className="mobile-brand"><a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a></div>
 						<div className="eyebrow">{authMode === 'login' ? 'Welcome back' : 'You belong here'}</div>
 						<h2>{authMode === 'login' ? 'Come on in.' : 'Join your family.'}</h2>
 						<p className="muted">{authMode === 'login' ? 'Sign in to see what everyone has been up to.' : 'Create an account to request access to the family album.'}</p>
@@ -392,7 +392,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	if (status === 'pending') {
 		return (
 			<main className="screen-state">
-				<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
+				<a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
 				<div className="pending-icon"><AppIcon name="lock" size={25} /></div>
 				<div className="eyebrow">Almost there</div>
 				<h1>You’re on the list.</h1>
@@ -405,7 +405,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	if (status === 'error') {
 		return (
 			<main className="screen-state">
-				<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
+				<a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
 				<div className="eyebrow">We hit a little snag</div>
 				<h1>Couldn’t open<br />the family album.</h1>
 				<p className="form-error" role="alert">{error}</p>
@@ -417,7 +417,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	return (
 		<div className="app-shell">
 			<aside className="sidebar">
-				<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
+				<a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
 				<div className="sidebar-section-label">YOUR SPACE</div>
 				<nav className="side-nav" aria-label="Main navigation">
 					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" /> Family album</a>
