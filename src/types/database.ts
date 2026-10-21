@@ -36,6 +36,24 @@ export type CommentRow = {
 	created_at: string;
 };
 
+export type BountyRow = {
+	id: string;
+	title: string;
+	description: string;
+	status: 'open' | 'resolved';
+	requested_by: string;
+	created_at: string;
+	resolved_at: string | null;
+};
+
+export type BountySubmissionRow = {
+	id: string;
+	bounty_id: string;
+	photo_id: string;
+	submitted_by: string;
+	created_at: string;
+};
+
 export type PersonRelationshipRow = {
 	id: string;
 	person_a: string;
@@ -176,6 +194,32 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['comments']['Insert']>;
 				Relationships: [];
 			};
+			bounties: {
+				Row: BountyRow;
+				Insert: {
+					id?: string;
+					title: string;
+					description: string;
+					status?: BountyRow['status'];
+					requested_by: string;
+					created_at?: string;
+					resolved_at?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['bounties']['Insert']>;
+				Relationships: [];
+			};
+			bounty_submissions: {
+				Row: BountySubmissionRow;
+				Insert: {
+					id?: string;
+					bounty_id: string;
+					photo_id: string;
+					submitted_by: string;
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['bounty_submissions']['Insert']>;
+				Relationships: [];
+			};
 			person_relationships: {
 				Row: PersonRelationshipRow;
 				Insert: {
@@ -274,6 +318,10 @@ export interface Database {
 			};
 			set_collection_cover: {
 				Args: { p_collection_id: string; p_photo_id: string | null };
+				Returns: undefined;
+			};
+			resolve_bounty: {
+				Args: { p_bounty_id: string };
 				Returns: undefined;
 			};
 		};

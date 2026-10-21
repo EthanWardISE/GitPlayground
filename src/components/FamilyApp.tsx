@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import type { User } from '@supabase/supabase-js';
 import { configureSupabaseClient, createSupabaseClient, getSupabaseErrorMessage, PHOTO_BUCKET } from '../lib/supabase';
 import CollectionsPanel from './CollectionsPanel';
+import BountyFeed from './BountyFeed';
 import FamilyTreeCanvas from './FamilyTreeCanvas';
 import type { CommentDocument, CommentRow, PhotoDocument, ProfileClaimRequestRow, ProfileDocument, ProfileRow } from '../types/database';
 
@@ -13,7 +14,7 @@ interface AppUser {
 }
 
 interface FamilyAppProps {
-	view?: 'feed' | 'tree' | 'person' | 'collections';
+	view?: 'feed' | 'tree' | 'person' | 'collections' | 'bounties';
 	personId?: string;
 	collectionId?: string;
 }
@@ -316,7 +317,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		}
 	}
 
-	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : 'The family album';
+	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : 'The family album';
 
 	if (status === 'loading') {
 		return <main className="screen-state"><div className="loading-mark">k</div><p>Gathering your family memories…</p></main>;
@@ -417,6 +418,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" /> Family album</a>
 					<a href="/tree" className={`nav-link ${view === 'tree' ? 'active' : ''}`} aria-current={view === 'tree' ? 'page' : undefined}><AppIcon name="tree" /> Family tree</a>
 					<a href="/collections" className={`nav-link ${view === 'collections' ? 'active' : ''}`} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" /> Photobooks</a>
+					<a href="/bounties" className={`nav-link ${view === 'bounties' ? 'active' : ''}`} aria-current={view === 'bounties' ? 'page' : undefined}><AppIcon name="heart" /> Memory bounties</a>
 				</nav>
 				<div className="sidebar-family">
 					<div className="sidebar-section-label">IN THE ALBUM <span>{profiles.length}</span></div>
@@ -441,6 +443,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				<a href="/" className={view === 'feed' ? 'active' : ''} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" size={19} /><span>Album</span></a>
 				<a href="/tree" className={view === 'tree' ? 'active' : ''} aria-current={view === 'tree' ? 'page' : undefined}><AppIcon name="tree" size={19} /><span>Family tree</span></a>
 				<a href="/collections" className={view === 'collections' ? 'active' : ''} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" size={19} /><span>Photobooks</span></a>
+				<a href="/bounties" className={view === 'bounties' ? 'active' : ''} aria-current={view === 'bounties' ? 'page' : undefined}><AppIcon name="heart" size={19} /><span>Bounties</span></a>
 				<button type="button" onClick={signOut} aria-label={`Sign out${user?.name ? ` of ${user.name}` : ''}`}><AppIcon name="logout" size={19} /><span>Sign out</span></button>
 			</nav>
 
@@ -454,7 +457,9 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				</header>
 				{loadWarning && <p className="load-warning" role="status">{loadWarning}</p>}
 
-				{view === 'collections' ? (
+				{view === 'bounties' ? (
+					<BountyFeed photos={photos} userId={user?.$id ?? ''} isAdmin={isAdmin} />
+				) : view === 'collections' ? (
 					<CollectionsPanel collectionId={collectionId} profiles={profiles} photos={photos} onOpenPhoto={setSelectedPhoto} />
 				) : view === 'tree' ? (
 					<section className="page-body">
