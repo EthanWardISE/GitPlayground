@@ -103,6 +103,7 @@ export async function submitExistingPhotos(bountyId: string, photoIds: string[],
 export async function uploadAndSubmitPhotos(
 	bountyId: string,
 	userId: string,
+	familyId: string,
 	files: File[],
 	year: number,
 	title?: string,
@@ -113,7 +114,7 @@ export async function uploadAndSubmitPhotos(
 	try {
 		for (const file of files) {
 			const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-			const filePath = `${userId}/bounties/${crypto.randomUUID()}.${extension}`;
+			const filePath = `families/${familyId}/bounties/${userId}/${crypto.randomUUID()}.${extension}`;
 			const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(filePath, file, { contentType: file.type, upsert: false });
 			if (uploadError) throw uploadError;
 			uploadedPaths.push(filePath);

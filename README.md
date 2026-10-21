@@ -82,23 +82,42 @@ Open `http://localhost:4321`, choose **Create an account**, and register using y
 
 If email confirmation is enabled for your Supabase project, confirm the message sent to your email, then sign in. If confirmation emails do not arrive during local testing, check the project’s **Authentication → Users** and **Authentication → SMTP/Email** settings. You may temporarily disable **Confirm email** in **Authentication → Providers → Email** for a private test project; turn it back on before inviting other people.
 
-New accounts are not approved automatically. A new user sees “You’re on the list” until an admin adds that user to `family_members`.
+Registration is open and does not require a whitelist. A new user who has not joined a family sees the family setup screen, where they can accept an invitation or create a new family immediately. Access to an existing family still requires an invitation from that family’s administrator.
 
-### 5. Approve yourself as the first family admin
+### Multiple family spaces
 
-1. In Supabase, open **Authentication → Users**.
-2. Find the account you just made and copy its **User UID**.
-3. Open **SQL Editor → New query** and run the following, replacing both example values. Use the UUID copied from Authentication → Users.
+Migration `20261104000000_multi_family_tenancy.sql` preserves the existing album as the first Kinfolk family and adds isolated family spaces. A signed-in user can create a family from the pending-access screen, accept an invitation link, and switch between families from the app navigation. Family membership, roles, profiles, photos, photobooks, tree data, claims, bounties, and comments are scoped to the selected family by database policies.
+
+Apply this migration after the existing migrations in timestamp order. It is data-preserving and does not delete existing profiles, photos, or memberships. Do not manually edit the migration or run it against a different project without first checking the project’s migration history.
+
+Migration `20261104010000_ensure_family_photos_bucket.sql` also restores the private `family-photos` bucket if it is missing. It is idempotent and does not delete or modify existing storage objects.
+
+### 5. Join or create a family
+
+For a fresh project, sign in to Kinfolk and use **Create a family** on the pending-access screen. You become that family’s administrator automatically.
+
+For an existing project, the migration preserves the original family and memberships. If the first administrator still needs to be added manually:
+
+1. In Supabase, open **Authentication → Users** and copy the account’s **User UID**.
+2. In **SQL Editor**, find the preserved family ID:
 
 ```sql
-insert into public.family_members (user_id, full_name, role)
-values ('PASTE-YOUR-USER-UUID-HERE', 'Your Name', 'admin');
+select id, name
+from public.families
+order by created_at, id
+limit 1;
 ```
 
-4. Refresh Kinfolk or sign out and sign back in. Your account should now enter the album.
-5. To approve a relative, have them create an account and confirm their email first. Find their UID in **Authentication → Users**, then run the same SQL with their UID, name, and role `'member'`.
+3. Add the user to that family, replacing all example values:
 
-Only add people you trust: a family member can see the album and its photos. `family_members` deliberately has no client-side insert policy, so users cannot approve themselves from the website.
+```sql
+insert into public.family_members (family_id, user_id, full_name, role)
+values ('PASTE-FAMILY-UUID-HERE', 'PASTE-USER-UUID-HERE', 'Your Name', 'admin');
+```
+
+4. Refresh Kinfolk or sign out and sign back in. To add relatives, use **Manage family → Create invite link** from the app rather than inserting memberships manually.
+
+Only invite people you trust: a family member can see the active family’s album and data. Membership inserts remain server-controlled; users can create their own new family but cannot add themselves to an existing family without an invitation.
 
 ### 6. Try the album
 

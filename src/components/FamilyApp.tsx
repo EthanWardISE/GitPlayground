@@ -8,7 +8,7 @@ import KinfolkWorldMap from './KinfolkWorldMap';
 import UploadCountrySelector from './UploadCountrySelector';
 import LocationSettings from './LocationSettings';
 import { countryName, normalizeCountryCode } from '../lib/countries';
-import type { CommentDocument, CommentRow, PhotoDocument, ProfileClaimRequestRow, ProfileDocument, ProfileRow } from '../types/database';
+import type { CommentDocument, CommentRow, FamilyRow, PhotoDocument, ProfileClaimRequestRow, ProfileDocument, ProfileRow } from '../types/database';
 
 type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'setup' | 'error';
 interface AppUser {
@@ -115,6 +115,8 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	const [status, setStatus] = useState<AppStatus>('loading');
 	const [user, setUser] = useState<AppUser | null>(null);
 	const [isAdmin, setIsAdmin] = useState(false);
+	const [families, setFamilies] = useState<FamilyRow[]>([]);
+	const [activeFamilyId, setActiveFamilyId] = useState('');
 	const [error, setError] = useState('');
 	const [loadWarning, setLoadWarning] = useState('');
 	const [authNotice, setAuthNotice] = useState('');
@@ -184,22 +186,79 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 	}, []);
 
 	const checkMembership = useCallback(async (activeUser: AppUser) => {
-		const { data: membership, error: membershipError } = await createSupabaseClient()
+		const supabase = createSupabaseClient();
+		const invitationToken = new URLSearchParams(window.location.search).get('invite');
+		if (invitationToken) {
+			const { error: invitationError } = await supabase.rpc('accept_family_invitation', { p_token: invitationToken });
+			if (invitationError) throw invitationError;
+			window.history.replaceState({}, '', window.location.pathname);
+		}
+		const { data: memberships, error: membershipError } = await supabase
 			.from('family_members')
-			.select('user_id, role')
+			.select('family_id, user_id, full_name, role, created_at')
 			.eq('user_id', activeUser.$id)
-			.maybeSingle();
+			.order('created_at');
 		if (membershipError) throw membershipError;
 		setUser(activeUser);
-		if (!membership) {
+		if (!memberships.length) {
+			setFamilies([]);
+			setActiveFamilyId('');
 			setIsAdmin(false);
 			setStatus('pending');
 			return;
 		}
-		setIsAdmin(membership.role === 'admin');
+		const familyIds = memberships.map((membership) => membership.family_id);
+		const { data: familyRows, error: familiesError } = await supabase
+			.from('families')
+			.select('*')
+			.in('id', familyIds)
+			.order('created_at');
+		if (familiesError) throw familiesError;
+		const { data: currentFamily, error: currentFamilyError } = await supabase.rpc('current_family_id');
+		if (currentFamilyError) throw currentFamilyError;
+		const nextFamilyId = typeof currentFamily === 'string' && familyIds.includes(currentFamily)
+			? currentFamily
+			: familyIds[0];
+		if (nextFamilyId !== currentFamily) {
+			const { error: switchError } = await supabase.rpc('switch_family', { p_family_id: nextFamilyId });
+			if (switchError) throw switchError;
+		}
+		const membership = memberships.find((item) => item.family_id === nextFamilyId);
+		setFamilies(familyRows);
+		setActiveFamilyId(nextFamilyId);
+		setIsAdmin(membership?.role === 'admin');
 		await loadFamilyData();
 		setStatus('ready');
 	}, [loadFamilyData]);
+
+	const switchFamily = useCallback(async (familyId: string) => {
+		if (familyId === activeFamilyId) return;
+		const { error: switchError } = await createSupabaseClient().rpc('switch_family', { p_family_id: familyId });
+		if (switchError) {
+			setError(getMessage(switchError));
+			return;
+		}
+		setActiveFamilyId(familyId);
+		setProfiles([]);
+		setPhotos([]);
+		setSelectedPhoto(null);
+		setStatus('loading');
+		try {
+			await loadFamilyData();
+			setIsAdmin(false);
+			const { data: membership } = await createSupabaseClient()
+				.from('family_members')
+				.select('role')
+				.eq('user_id', user?.$id ?? '')
+				.eq('family_id', familyId)
+				.maybeSingle();
+			setIsAdmin(membership?.role === 'admin');
+			setStatus('ready');
+		} catch (loadError) {
+			setError(getMessage(loadError));
+			setStatus('error');
+		}
+	}, [activeFamilyId, loadFamilyData, user?.$id]);
 
 	useEffect(() => {
 		async function restoreSession() {
@@ -397,8 +456,11 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				<a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
 				<div className="pending-icon"><AppIcon name="lock" size={25} /></div>
 				<div className="eyebrow">Almost there</div>
-				<h1>You’re on the list.</h1>
-				<p className="muted">Your account is ready{user?.name ? `, ${user.name.split(' ')[0]}` : ''}. A family admin needs to approve you in Supabase before you can see the album.</p>
+				<h1>Make a place for your people.</h1>
+				<p className="muted">Your account is ready{user?.name ? `, ${user.name.split(' ')[0]}` : ''}. Create a family space, or ask an existing family admin to invite you.</p>
+				<FamilyCreationPanel onCreated={async () => {
+					if (user) await checkMembership(user);
+				}} />
 				<button className="button button-quiet" onClick={signOut}><AppIcon name="logout" size={17} /> Sign out</button>
 			</main>
 		);
@@ -420,6 +482,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		<div className="app-shell">
 			<aside className="sidebar">
 				<a className="brand" href="/"><img className="brand-mark-image" src="/logo.svg" alt="" /><span>kinfolk</span></a>
+				<FamilySwitcher families={families} activeFamilyId={activeFamilyId} onSwitch={(familyId) => void switchFamily(familyId)} />
 				<div className="sidebar-section-label">YOUR SPACE</div>
 				<nav className="side-nav" aria-label="Main navigation">
 					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" /> Family album</a>
@@ -462,6 +525,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				<header className="topbar">
 					<div className="breadcrumb"><span>YOUR SPACE</span><span className="breadcrumb-divider">/</span><b>{pageTitle.toUpperCase()}</b></div>
 					<div className="topbar-actions">
+						<FamilySwitcher families={families} activeFamilyId={activeFamilyId} onSwitch={(familyId) => void switchFamily(familyId)} />
 						<div className="member-count"><span className="online-dot" /> {profiles.length} family members</div>
 						<button className="button button-primary button-small" onClick={() => setShowUpload(true)}><AppIcon name="plus" size={17} /> Add a memory</button>
 					</div>
@@ -469,7 +533,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				{loadWarning && <p className="load-warning" role="status">{loadWarning}</p>}
 
 				{view === 'bounties' ? (
-					<BountyFeed photos={photos} userId={user?.$id ?? ''} isAdmin={isAdmin} />
+					<BountyFeed photos={photos} userId={user?.$id ?? ''} familyId={activeFamilyId} isAdmin={isAdmin} />
 				) : view === 'map' ? (
 					<KinfolkWorldMap />
 				) : view === 'settings' ? (
@@ -477,10 +541,20 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 						<div className="page-heading">
 							<div><div className="eyebrow">Make Kinfolk feel like yours</div><h1>General settings</h1><p className="muted">Manage your family album preferences.</p></div>
 						</div>
+						<FamilyManagement familyId={activeFamilyId} isAdmin={isAdmin} />
+						<section className="family-management">
+							<div className="eyebrow">Another space</div>
+							<h2>Create a new family</h2>
+							<p className="muted">Start a separate family album. You will become its administrator and can invite members afterward.</p>
+							<FamilyCreationPanel onCreated={async (familyId) => {
+								if (user) await checkMembership(user);
+								await switchFamily(familyId);
+							}} />
+						</section>
 						<LocationSettings />
 					</section>
 				) : view === 'collections' ? (
-					<CollectionsPanel collectionId={collectionId} profiles={profiles} photos={photos} onOpenPhoto={setSelectedPhoto} onPhotoAdded={loadFamilyData} />
+					<CollectionsPanel collectionId={collectionId} familyId={activeFamilyId} profiles={profiles} photos={photos} onOpenPhoto={setSelectedPhoto} onPhotoAdded={loadFamilyData} />
 				) : view === 'tree' ? (
 					<section className="page-body">
 						<div className="page-heading">
@@ -508,6 +582,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 									profile={selectedPerson}
 									photos={photos}
 									userId={user?.$id ?? ''}
+									familyId={activeFamilyId}
 									isAdmin={isAdmin}
 									alreadyLinked={profiles.some((profile) => profile.userId === user?.$id)}
 									onUpdated={loadFamilyData}
@@ -537,7 +612,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				)}
 			</main>
 
-			{showUpload && <UploadDialog profiles={profiles} onClose={() => setShowUpload(false)} onCreated={async () => { await loadFamilyData(); setShowUpload(false); }} />}
+			{showUpload && <UploadDialog profiles={profiles} familyId={activeFamilyId} onClose={() => setShowUpload(false)} onCreated={async () => { await loadFamilyData(); setShowUpload(false); }} />}
 			{showCreateProfile && <CreatePersonDialog onClose={() => setShowCreateProfile(false)} onCreated={(profileId) => {
 				window.location.assign(`/person/${profileId}`);
 			}} />}
@@ -652,10 +727,11 @@ function ProfileBio({ profile, userId }: { profile: ProfileDocument; userId: str
 	);
 }
 
-function ProfileActions({ profile, photos, userId, isAdmin, alreadyLinked, onUpdated, onDeleted }: {
+function ProfileActions({ profile, photos, userId, familyId, isAdmin, alreadyLinked, onUpdated, onDeleted }: {
 	profile: ProfileDocument;
 	photos: PhotoDocument[];
 	userId: string;
+	familyId: string;
 	isAdmin: boolean;
 	alreadyLinked: boolean;
 	onUpdated: () => Promise<void>;
@@ -771,7 +847,7 @@ function ProfileActions({ profile, photos, userId, isAdmin, alreadyLinked, onUpd
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Could not encode the cropped avatar.')), 'image/webp', 0.82);
 			});
-			avatarPath = `${userId}/profile-avatars/${createUuid()}.webp`;
+			avatarPath = `families/${familyId}/profile-avatars/${userId}/${createUuid()}.webp`;
 			const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(avatarPath, blob, {
 				contentType: 'image/webp',
 				upsert: false,
@@ -1000,6 +1076,96 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
 	return <div className="empty-state"><span className="empty-icon"><AppIcon name="image" size={24} /></span><h3>{title}</h3><p>{body}</p>{action}</div>;
 }
 
+function FamilySwitcher({ families, activeFamilyId, onSwitch }: { families: FamilyRow[]; activeFamilyId: string; onSwitch: (familyId: string) => void }) {
+	if (families.length < 2) return null;
+	return (
+		<label className="family-switcher">
+			<span>Family space</span>
+			<select value={activeFamilyId} onChange={(event) => onSwitch(event.target.value)}>
+				{families.map((family) => <option value={family.id} key={family.id}>{family.name}</option>)}
+			</select>
+		</label>
+	);
+}
+
+function FamilyManagement({ familyId, isAdmin }: { familyId: string; isAdmin: boolean }) {
+	const [email, setEmail] = useState('');
+	const [inviteLink, setInviteLink] = useState('');
+	const [error, setError] = useState('');
+	const [notice, setNotice] = useState('');
+	const [saving, setSaving] = useState(false);
+
+	async function createInvitation(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		setError('');
+		setNotice('');
+		try {
+			const { data, error: invitationError } = await createSupabaseClient().rpc('create_family_invitation', {
+				p_family_id: familyId,
+				p_email: email.trim(),
+			});
+			if (invitationError) throw invitationError;
+			const token = data?.[0]?.invitation_token;
+			if (!token) throw new Error('The invitation was not created. Please try again.');
+			setInviteLink(`${window.location.origin}/app?invite=${encodeURIComponent(token)}`);
+			setNotice('Invitation created. Share the link with your family member.');
+			setEmail('');
+		} catch (invitationError) {
+			setError(getMessage(invitationError));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	if (!isAdmin) return null;
+	return (
+		<section className="family-management">
+			<div className="eyebrow">Family space</div>
+			<h2>Invite someone you trust</h2>
+			<p className="muted">They can join this family and switch between it and any other family spaces they belong to.</p>
+			<form onSubmit={createInvitation}>
+				<label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="relative@example.com" required /></label>
+				<button className="button button-primary button-small" type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create invite link'}</button>
+			</form>
+			{inviteLink && <label className="invite-link-field">Invite link<input value={inviteLink} readOnly onFocus={(event) => event.currentTarget.select()} /></label>}
+			{notice && <p className="form-notice" role="status">{notice}</p>}
+			{error && <p className="form-error" role="alert">{error}</p>}
+		</section>
+	);
+}
+
+function FamilyCreationPanel({ onCreated }: { onCreated: (familyId: string) => Promise<void> }) {
+	const [name, setName] = useState('');
+	const [error, setError] = useState('');
+	const [saving, setSaving] = useState(false);
+
+	async function createFamily(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		setError('');
+		try {
+			const { data, error: createError } = await createSupabaseClient().rpc('create_family', { p_name: name.trim() });
+			if (createError) throw createError;
+			if (!data) throw new Error('The family was not created. Please try again.');
+			await onCreated(data);
+		} catch (createError) {
+			setError(getMessage(createError));
+		} finally {
+			setSaving(false);
+		}
+
+	}
+
+	return (
+		<form className="family-create-form" onSubmit={createFamily}>
+			<label>Family name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="The Ward family" maxLength={120} required /></label>
+			<button className="button button-primary" type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create a family'}</button>
+			{error && <p className="form-error" role="alert">{error}</p>}
+		</form>
+	);
+}
+
 function PhotoGrid({ photos, profiles, onOpen }: { photos: PhotoDocument[]; profiles: ProfileDocument[]; onOpen: (photo: PhotoDocument) => void }) {
 	return (
 		<div className="photo-grid">
@@ -1020,7 +1186,7 @@ function PhotoGrid({ photos, profiles, onOpen }: { photos: PhotoDocument[]; prof
 	);
 }
 
-function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocument[]; onClose: () => void; onCreated: () => Promise<void> }) {
+function UploadDialog({ profiles, familyId, onClose, onCreated }: { profiles: ProfileDocument[]; familyId: string; onClose: () => void; onCreated: () => Promise<void> }) {
 	const [selectedIds, setSelectedIds] = useState<string[]>([]);
 	const [search, setSearch] = useState('');
 	const [error, setError] = useState('');
@@ -1109,7 +1275,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 			if (userError) throw userError;
 			if (!userData.user) throw new Error('Your session expired. Sign in again before uploading a photo.');
 
-			filePath = `${userData.user.id}/${createUuid()}.${extension}`;
+			filePath = `families/${familyId}/photos/${userData.user.id}/${createUuid()}.${extension}`;
 			const { error: storageError } = await supabase.storage
 				.from(PHOTO_BUCKET)
 				.upload(filePath, file, { contentType: file.type, upsert: false });
