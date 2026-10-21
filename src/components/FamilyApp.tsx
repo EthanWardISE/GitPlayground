@@ -239,6 +239,24 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		void restoreSession();
 	}, [checkMembership]);
 
+	useEffect(() => {
+		function closeMenus(event: PointerEvent | KeyboardEvent) {
+			if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
+			const activeMenu = event instanceof PointerEvent && event.target instanceof Element
+				? event.target.closest('.person-filter')
+				: null;
+			document.querySelectorAll<HTMLDetailsElement>('.person-filter[open]').forEach((menu) => {
+				if (!activeMenu || !activeMenu.contains(menu)) menu.open = false;
+			});
+		}
+		document.addEventListener('pointerdown', closeMenus);
+		document.addEventListener('keydown', closeMenus);
+		return () => {
+			document.removeEventListener('pointerdown', closeMenus);
+			document.removeEventListener('keydown', closeMenus);
+		};
+	}, []);
+
 	const years = useMemo(
 		() => [...new Set(photos.map((photo) => photo.year))].sort((a, b) => b - a),
 		[photos],
@@ -396,9 +414,9 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				<a className="brand" href="/"><span className="brand-mark">k</span><span>kinfolk</span></a>
 				<div className="sidebar-section-label">YOUR SPACE</div>
 				<nav className="side-nav" aria-label="Main navigation">
-					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`}><AppIcon name="home" /> Family album</a>
-					<a href="/tree" className={`nav-link ${view === 'tree' ? 'active' : ''}`}><AppIcon name="tree" /> Family tree</a>
-					<a href="/collections" className={`nav-link ${view === 'collections' ? 'active' : ''}`}><AppIcon name="book" /> Photobooks</a>
+					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" /> Family album</a>
+					<a href="/tree" className={`nav-link ${view === 'tree' ? 'active' : ''}`} aria-current={view === 'tree' ? 'page' : undefined}><AppIcon name="tree" /> Family tree</a>
+					<a href="/collections" className={`nav-link ${view === 'collections' ? 'active' : ''}`} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" /> Photobooks</a>
 				</nav>
 				<div className="sidebar-family">
 					<div className="sidebar-section-label">IN THE ALBUM <span>{profiles.length}</span></div>
@@ -418,6 +436,13 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 					<button className="account-row" onClick={signOut}><span className="avatar avatar-user">{initials(user?.name || user?.email || 'F')}</span><span className="account-copy"><b>{user?.name || 'Family member'}</b><small>{user?.email}</small></span><AppIcon name="logout" size={17} /></button>
 				</div>
 			</aside>
+
+			<nav className="mobile-nav" aria-label="Mobile navigation">
+				<a href="/" className={view === 'feed' ? 'active' : ''} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" size={19} /><span>Album</span></a>
+				<a href="/tree" className={view === 'tree' ? 'active' : ''} aria-current={view === 'tree' ? 'page' : undefined}><AppIcon name="tree" size={19} /><span>Family tree</span></a>
+				<a href="/collections" className={view === 'collections' ? 'active' : ''} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" size={19} /><span>Photobooks</span></a>
+				<button type="button" onClick={signOut} aria-label={`Sign out${user?.name ? ` of ${user.name}` : ''}`}><AppIcon name="logout" size={19} /><span>Sign out</span></button>
+			</nav>
 
 			<main className="main-content">
 				<header className="topbar">
