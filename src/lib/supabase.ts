@@ -39,9 +39,9 @@ export function getSupabaseErrorMessage(error: unknown, fallback = 'Something we
     if (
         code === 'PGRST205'
         || code === '42P01'
-        || (/schema cache/i.test(message) && /profile_claim_requests|person_relationships|tree_positions|collections|collection_photos/i.test(message))
+        || (/schema cache/i.test(message) && /profile_claim_requests|person_relationships|tree_positions|collections|collection_photos|bounties|bounty_submissions/i.test(message))
     ) {
-        return 'Kinfolk’s people, family tree, and photobook database update is missing. Run supabase/migrations/20261021000000_people_tree_collections.sql in your Supabase SQL Editor, then refresh the page.';
+        return 'Kinfolk’s family database update is missing. Run the latest files in supabase/migrations in your Supabase SQL Editor, then refresh the page.';
     }
 
     return message || fallback;
