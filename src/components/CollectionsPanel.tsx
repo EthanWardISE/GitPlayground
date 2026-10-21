@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createSupabaseClient, getSupabaseErrorMessage, PHOTO_BUCKET } from '../lib/supabase';
 import type { CollectionRow, PhotoDocument, ProfileDocument } from '../types/database';
+import { getCountries } from '../lib/countries';
 
 type CollectionPhoto = { collection_id: string; photo_id: string };
 
@@ -9,11 +10,13 @@ export default function CollectionsPanel({
 	profiles,
 	photos,
 	onOpenPhoto,
+	onPhotoAdded,
 }: {
 	collectionId?: string;
 	profiles: ProfileDocument[];
 	photos: PhotoDocument[];
 	onOpenPhoto: (photo: PhotoDocument) => void;
+	onPhotoAdded?: () => Promise<void>;
 }) {
 	const [collections, setCollections] = useState<CollectionRow[]>([]);
 	const [memberships, setMemberships] = useState<CollectionPhoto[]>([]);
@@ -22,6 +25,10 @@ export default function CollectionsPanel({
 	const [photoToAdd, setPhotoToAdd] = useState('');
 	const [newTitle, setNewTitle] = useState('');
 	const [newDescription, setNewDescription] = useState('');
+	const [newCountry, setNewCountry] = useState('');
+	const [uploadFile, setUploadFile] = useState<File | null>(null);
+	const [uploadTitle, setUploadTitle] = useState('');
+	const [uploadYear, setUploadYear] = useState(String(new Date().getFullYear()));
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState('');
@@ -91,6 +98,7 @@ export default function CollectionsPanel({
 				.insert({
 					title: newTitle.trim(),
 					description: newDescription.trim() || null,
+					country_code: newCountry || null,
 				})
 				.select('*')
 				.single();
@@ -98,6 +106,8 @@ export default function CollectionsPanel({
 			setCollections((current) => [data, ...current]);
 			setNewTitle('');
 			setNewDescription('');
+			setNewCountry('');
+			window.location.assign(`/collections/${data.id}`);
 		} catch (createError) {
 			setError(getSupabaseErrorMessage(createError, 'Could not create the collection.'));
 		} finally {
@@ -122,6 +132,96 @@ export default function CollectionsPanel({
 		} finally {
 			setSaving(false);
 		}
+	}
+
+	async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
+			event.preventDefault();
+			if (!collectionId || !activeCollection || !uploadFile) return;
+			setSaving(true);
+			setError('');
+			let filePath: string | null = null;
+			let uploaded = false;
+			let photoId: string | null = null;
+			let transactionComplete = false;
+			try {
+				const extensionByType: Record<string, string> = {
+					'image/jpeg': 'jpg',
+					'image/png': 'png',
+					'image/webp': 'webp',
+					'image/gif': 'gif',
+					'image/avif': 'avif',
+				};
+				const extension = extensionByType[uploadFile.type];
+				if (!extension) throw new Error('Choose a JPEG, PNG, WebP, GIF, or AVIF image.');
+				if (uploadFile.size > 50 * 1024 * 1024) throw new Error('Choose an image smaller than 50 MiB.');
+				const supabase = createSupabaseClient();
+				const { data: userData, error: userError } = await supabase.auth.getUser();
+				if (userError) throw userError;
+				if (!userData.user) throw new Error('Your session expired. Sign in again before uploading.');
+				filePath = `${userData.user.id}/${crypto.randomUUID()}.${extension}`;
+				const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).upload(filePath, uploadFile, {
+					contentType: uploadFile.type,
+					upsert: false,
+				});
+				if (storageError) throw storageError;
+				uploaded = true;
+				const { data: photo, error: photoError } = await supabase.from('photos').insert({
+					title: uploadTitle.trim() || null,
+					file_path: filePath,
+					year: Number(uploadYear),
+					uploaded_by: userData.user.id,
+					tagged_profiles: [],
+					country_code: activeCollection.country_code,
+				}).select('*').single();
+				if (photoError) throw photoError;
+				photoId = photo.id;
+				const { error: membershipError } = await supabase.from('collection_photos').insert({
+					collection_id: collectionId,
+					photo_id: photoId,
+				});
+				if (membershipError) throw membershipError;
+				const { data: signedPhoto, error: signedUrlError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(filePath, 60 * 60);
+				if (signedUrlError) throw signedUrlError;
+				const newPhoto: PhotoDocument = {
+					$id: photo.id,
+					title: photo.title ?? undefined,
+					fileId: photo.file_path,
+					year: photo.year,
+					uploadedBy: photo.uploaded_by,
+					taggedProfiles: photo.tagged_profiles,
+					countryCode: photo.country_code ?? activeCollection.country_code ?? undefined,
+					imageUrl: signedPhoto.signedUrl,
+				};
+				setMemberships((current) => [...current, { collection_id: collectionId, photo_id: photoId as string }]);
+				setThumbnails((current) => ({ ...current, [newPhoto.$id]: signedPhoto.signedUrl }));
+				transactionComplete = true;
+				if (onPhotoAdded) await onPhotoAdded();
+				setUploadFile(null);
+				setUploadTitle('');
+				setUploadYear(String(new Date().getFullYear()));
+			} catch (uploadError) {
+				let message = getSupabaseErrorMessage(uploadError, 'Could not add the photo to this photobook.');
+				if (photoId && !transactionComplete) {
+					const { error: membershipCleanupError } = await createSupabaseClient()
+						.from('collection_photos')
+						.delete()
+						.eq('collection_id', collectionId)
+						.eq('photo_id', photoId);
+					if (membershipCleanupError) message += ` Cleanup failed: ${membershipCleanupError.message}`;
+					const { error: photoCleanupError } = await createSupabaseClient()
+						.from('photos')
+						.delete()
+						.eq('id', photoId);
+					if (photoCleanupError) message += ` Photo cleanup failed: ${photoCleanupError.message}`;
+				}
+				if (uploaded && filePath && !transactionComplete) {
+					const { error: storageCleanupError } = await createSupabaseClient().storage.from(PHOTO_BUCKET).remove([filePath]);
+					if (storageCleanupError) message += ` Storage cleanup failed: ${storageCleanupError.message}`;
+				}
+				setError(message);
+			} finally {
+				setSaving(false);
+			}
 	}
 
 	async function removePhoto(photoId: string) {
@@ -232,6 +332,7 @@ export default function CollectionsPanel({
 						<div><p className="eyebrow">Start a new chapter</p><h2>Create a photobook</h2></div>
 						<label>Collection name<input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} maxLength={120} required placeholder="France, summer 2016" /></label>
 						<label>A note (optional)<input value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="A week we still talk about" /></label>
+						<label className="country-dropdown">Country (optional)<select value={newCountry} onChange={(event) => setNewCountry(event.target.value)}><option value="">No country selected</option>{getCountries().map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}</select></label>
 						<button className="button button-primary" disabled={saving}>{saving ? 'Creating…' : 'Create collection'}</button>
 					</form>
 				</>
@@ -264,6 +365,13 @@ export default function CollectionsPanel({
 						</details>
 						{selectedPeople.length > 0 && <button className="text-link" type="button" onClick={clearPeopleFilter}>Clear people filter</button>}
 					</div>
+					<form className="collection-upload" onSubmit={(event) => void uploadPhoto(event)}>
+						<div><p className="eyebrow">Add a new memory</p><h2>Upload directly to this photobook</h2><p className="muted">This photo will also appear in the family album and use {activeCollection.country_code ? 'this photobook’s country' : 'your default country'}.</p></div>
+						<label>Photo<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" required onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} /></label>
+						<label>Title (optional)<input value={uploadTitle} onChange={(event) => setUploadTitle(event.target.value)} placeholder="A day to remember" /></label>
+						<label>Year<input type="number" min="1800" max={new Date().getFullYear()} value={uploadYear} onChange={(event) => setUploadYear(event.target.value)} required /></label>
+						<button className="button button-primary" type="submit" disabled={!uploadFile || saving}>{saving ? 'Uploading…' : 'Upload to photobook'}</button>
+					</form>
 					{visiblePhotos.length ? <div className="photo-grid collection-photo-grid">
 						{visiblePhotos.map((photo) => (
 							<article className="collection-photo-card" key={photo.$id}>
