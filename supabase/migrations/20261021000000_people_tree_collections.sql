@@ -348,6 +348,7 @@ with check (
 );
 
 drop policy if exists "Family can delete profiles" on public.profiles;
+drop policy if exists "Owners and admins can delete profiles" on public.profiles;
 create policy "Owners and admins can delete profiles"
 on public.profiles for delete to authenticated
 using (

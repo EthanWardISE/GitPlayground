@@ -9,11 +9,24 @@ export default function LocationSettings() {
 	const [error, setError] = useState('');
 
 	useEffect(() => {
-		void createSupabaseClient().from('profiles').select('default_country_code').single()
-			.then(({ data, error: loadError }) => {
-				if (loadError) setError(getSupabaseErrorMessage(loadError, 'Could not load location settings.'));
-				else if (data?.default_country_code) setValue(data.default_country_code);
-			});
+		let cancelled = false;
+		async function loadSettings() {
+			const user = (await createSupabaseClient().auth.getUser()).data.user;
+			if (!user) return;
+			const { data, error: loadError } = await createSupabaseClient()
+				.from('profiles')
+				.select('default_country_code')
+				.eq('user_id', user.id)
+				.limit(1)
+				.maybeSingle();
+			if (cancelled) return;
+			if (loadError) setError(getSupabaseErrorMessage(loadError, 'Could not load location settings.'));
+			else if (data?.default_country_code) setValue(data.default_country_code);
+		}
+		void loadSettings().catch((loadError) => {
+			if (!cancelled) setError(getSupabaseErrorMessage(loadError, 'Could not load location settings.'));
+		});
+		return () => { cancelled = true; };
 	}, []);
 
 	async function save() {
