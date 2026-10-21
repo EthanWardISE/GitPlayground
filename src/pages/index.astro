@@ -1,6 +1,42 @@
 ---
-import FamilyApp from '../components/FamilyApp';
-import '../styles/family.css';
+import { createServerClient } from '@supabase/ssr';
+import '../styles/global.css';
+import HeroSection from '../components/HeroSection.jsx';
+import FeaturesGrid from '../components/FeaturesGrid.jsx';
+import UpdatesFeed from '../components/UpdatesFeed.jsx';
+
+const supabaseUrl = process.env.PUBLIC_SUPABASE_URL || import.meta.env.PUBLIC_SUPABASE_URL;
+const supabasePublishableKey = process.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY || import.meta.env.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+if (supabaseUrl && supabasePublishableKey) {
+	const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
+		cookies: {
+			getAll() {
+				const cookieHeader = Astro.request.headers.get('cookie') ?? '';
+				return cookieHeader
+					.split(';')
+					.map((cookie) => cookie.trim())
+					.filter(Boolean)
+					.map((cookie) => {
+						const separator = cookie.indexOf('=');
+						return {
+							name: separator === -1 ? cookie : cookie.slice(0, separator),
+							value: separator === -1 ? '' : decodeURIComponent(cookie.slice(separator + 1)),
+						};
+					});
+			},
+			setAll(cookies) {
+				cookies.forEach(({ name, value, options }) => Astro.cookies.set(name, value, options));
+			},
+		},
+	});
+	const { data, error } = await supabase.auth.getUser();
+	if (error) {
+		console.error('Could not verify the landing page session:', error);
+	} else if (data.user) {
+		return Astro.redirect('/app');
+	}
+}
 ---
 
 <!doctype html>
@@ -8,10 +44,47 @@ import '../styles/family.css';
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
-		<meta name="description" content="A private home for the moments your family shares." />
-		<title>Kinfolk — Family memories</title>
+		<meta name="description" content="Kinfolk is a private home for the moments your family shares." />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>Kinfolk — Keep close</title>
 	</head>
-	<body>
-		<FamilyApp client:load />
+	<body class="landing-page">
+		<header class="landing-nav">
+			<a class="landing-brand" href="/" aria-label="Kinfolk home"><img src="/logo.svg" alt="" /> <span>kinfolk</span></a>
+			<nav aria-label="Main navigation">
+				<a href="#about">About</a>
+				<a href="#features">Features</a>
+				<a href="#updates">Updates</a>
+			</nav>
+			<a class="nav-join" href="/app">Sign in <span>/</span> Join family <b>↗</b></a>
+		</header>
+
+		<main>
+			<HeroSection client:load />
+			<section class="about-section landing-container" id="about">
+				<div class="section-kicker">Your private home for those special memories</div>
+				<div class="about-layout">
+					<h2>Less noise.<br /><em>More us.</em></h2>
+					<div class="about-copy"><p>We made Kinfolk for the stories that don&apos;t belong to be forgotten. The blurry photos, the hand-me-down recipes, the “do you remember when?” moments.</p><p>It&apos;s a quiet, private space for your family to gather, look back, and leave something lovely for whoever comes next.</p><a class="text-arrow" href="/about">Our reason for being <span>↗</span></a></div>
+				</div>
+				<div class="about-rule"><span>✦</span><span>Built with care for the people you call home</span><span>✦</span></div>
+			</section>
+
+			<section class="features-section landing-container" id="features">
+				<div class="section-heading"><div><div class="section-kicker">Everything worth keeping</div><h2>Made for your<br /><em>family’s kind of magic.</em></h2></div><p>One shared space for the memories that matter, the ones you&apos;ll be glad you kept.</p></div>
+				<FeaturesGrid client:load />
+			</section>
+
+			<section class="updates-section landing-container" id="updates">
+				<div class="section-heading updates-heading"><div><div class="section-kicker">From the Kinfolk team</div><h2>Developer blogs,<br /><em>coming soon.</em></h2></div></div>
+				<UpdatesFeed client:load />
+			</section>
+
+			<section class="join-section landing-container" id="join">
+				<div class="join-orbit" aria-hidden="true">✦</div>
+				<div class="section-kicker">Come on in</div><h2>Keep your people<br /><em>close.</em></h2><p>Kinfolk is invite-only, because family is.</p><a class="landing-button landing-button-primary" href="/app">Join your family <span aria-hidden="true">↗</span></a>
+			</section>
+		</main>
+		<footer class="landing-footer"><a class="landing-brand" href="/" aria-label="Kinfolk home"><img src="/logo.svg" alt="" /> <span>kinfolk</span></a><span>Made by Ethan Ward, 2026</span><a href="#about">Back to top ↑</a></footer>
 	</body>
 </html>

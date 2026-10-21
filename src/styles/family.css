@@ -70,6 +70,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-family: var(--serif); font-size: 25px; font-weight: 700; letter-spacing: -.9px; }
 .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 12px 12px 12px 4px; background: #6b8968; color: white; font-family: var(--serif); font-size: 22px; font-style: italic; line-height: 1; }
+.brand-mark-image { width: 34px; height: 34px; border-radius: 12px 12px 12px 4px; }
 .eyebrow { color: #818075; font-size: 10px; font-weight: 700; letter-spacing: 1.65px; text-transform: uppercase; }
 .muted { color: var(--muted); }
 .button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 9px; padding: 0 17px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 700; transition: background .18s ease, transform .18s ease; }
@@ -131,7 +132,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .screen-state h1 { margin: 13px 0 8px; font-family: var(--serif); font-size: 42px; font-weight: 400; letter-spacing: -1px; line-height: 1.15; }
 .screen-state > p { max-width: 430px; margin: 8px 0 22px; }
 .screen-state > .form-error { max-width: 560px; margin-bottom: 22px; }
-.loading-mark { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 16px 16px 16px 5px; background: #6b8968; color: #fff; font-family: var(--serif); font-size: 31px; font-style: italic; }
+.loading-mark { display: block; width: 46px; height: 46px; border-radius: 16px 16px 16px 5px; }
 .pending-icon { display: grid; width: 54px; height: 54px; place-items: center; margin-bottom: 20px; border-radius: 50%; background: #eeefe7; color: #667e62; }
 
 .app-shell { min-height: 100vh; }
