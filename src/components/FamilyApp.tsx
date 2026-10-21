@@ -4,6 +4,10 @@ import { configureSupabaseClient, createSupabaseClient, getSupabaseErrorMessage,
 import CollectionsPanel from './CollectionsPanel';
 import BountyFeed from './BountyFeed';
 import FamilyTreeCanvas from './FamilyTreeCanvas';
+import KinfolkWorldMap from './KinfolkWorldMap';
+import UploadCountrySelector from './UploadCountrySelector';
+import LocationSettings from './LocationSettings';
+import { countryName, normalizeCountryCode } from '../lib/countries';
 import type { CommentDocument, CommentRow, PhotoDocument, ProfileClaimRequestRow, ProfileDocument, ProfileRow } from '../types/database';
 
 type AppStatus = 'loading' | 'signedOut' | 'pending' | 'ready' | 'setup' | 'error';
@@ -14,7 +18,7 @@ interface AppUser {
 }
 
 interface FamilyAppProps {
-	view?: 'feed' | 'tree' | 'person' | 'collections' | 'bounties';
+	view?: 'feed' | 'tree' | 'person' | 'collections' | 'bounties' | 'map' | 'settings';
 	personId?: string;
 	collectionId?: string;
 }
@@ -125,7 +129,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		const supabase = createSupabaseClient();
 		const [profileResult, photoResult] = await Promise.all([
 			supabase.from('profiles').select('*').order('name').limit(100),
-			supabase.from('photos').select('*').order('year', { ascending: false }).limit(100),
+			supabase.rpc('get_photos_with_resolved_country'),
 		]);
 		if (profileResult.error) throw profileResult.error;
 		if (photoResult.error) throw photoResult.error;
@@ -148,6 +152,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 					year: photo.year,
 					uploadedBy: photo.uploaded_by,
 					taggedProfiles: photo.tagged_profiles,
+					countryCode: normalizeCountryCode(photo.country_code) ?? undefined,
 					imageUrl: data.signedUrl,
 				};
 			})),
@@ -317,7 +322,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		}
 	}
 
-	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : 'The family album';
+	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : view === 'map' ? 'Memory map' : view === 'settings' ? 'General settings' : 'The family album';
 
 	if (status === 'loading') {
 		return <main className="screen-state"><div className="loading-mark">k</div><p>Gathering your family memories…</p></main>;
@@ -418,7 +423,9 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 					<a href="/" className={`nav-link ${view === 'feed' ? 'active' : ''}`} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" /> Family album</a>
 					<a href="/tree" className={`nav-link ${view === 'tree' ? 'active' : ''}`} aria-current={view === 'tree' ? 'page' : undefined}><AppIcon name="tree" /> Family tree</a>
 					<a href="/collections" className={`nav-link ${view === 'collections' ? 'active' : ''}`} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" /> Photobooks</a>
+					<a href="/map" className={`nav-link ${view === 'map' ? 'active' : ''}`} aria-current={view === 'map' ? 'page' : undefined}><AppIcon name="search" /> Memory map</a>
 					<a href="/bounties" className={`nav-link ${view === 'bounties' ? 'active' : ''}`} aria-current={view === 'bounties' ? 'page' : undefined}><AppIcon name="heart" /> Memory bounties</a>
+					<a href="/settings" className={`nav-link nav-link-secondary ${view === 'settings' ? 'active' : ''}`} aria-current={view === 'settings' ? 'page' : undefined}><AppIcon name="tree" size={17} /> General settings</a>
 				</nav>
 				<div className="sidebar-family">
 					<div className="sidebar-section-label">IN THE ALBUM <span>{profiles.length}</span></div>
@@ -443,7 +450,9 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				<a href="/" className={view === 'feed' ? 'active' : ''} aria-current={view === 'feed' ? 'page' : undefined}><AppIcon name="home" size={19} /><span>Album</span></a>
 				<a href="/tree" className={view === 'tree' ? 'active' : ''} aria-current={view === 'tree' ? 'page' : undefined}><AppIcon name="tree" size={19} /><span>Family tree</span></a>
 				<a href="/collections" className={view === 'collections' ? 'active' : ''} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" size={19} /><span>Photobooks</span></a>
+				<a href="/map" className={view === 'map' ? 'active' : ''} aria-current={view === 'map' ? 'page' : undefined}><AppIcon name="search" size={19} /><span>Map</span></a>
 				<a href="/bounties" className={view === 'bounties' ? 'active' : ''} aria-current={view === 'bounties' ? 'page' : undefined}><AppIcon name="heart" size={19} /><span>Bounties</span></a>
+				<a href="/settings" className={view === 'settings' ? 'active' : ''} aria-current={view === 'settings' ? 'page' : undefined}><AppIcon name="tree" size={19} /><span>Settings</span></a>
 				<button type="button" onClick={signOut} aria-label={`Sign out${user?.name ? ` of ${user.name}` : ''}`}><AppIcon name="logout" size={19} /><span>Sign out</span></button>
 			</nav>
 
@@ -459,8 +468,17 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 
 				{view === 'bounties' ? (
 					<BountyFeed photos={photos} userId={user?.$id ?? ''} isAdmin={isAdmin} />
+				) : view === 'map' ? (
+					<KinfolkWorldMap />
+				) : view === 'settings' ? (
+					<section className="page-body">
+						<div className="page-heading">
+							<div><div className="eyebrow">Make Kinfolk feel like yours</div><h1>General settings</h1><p className="muted">Manage your family album preferences.</p></div>
+						</div>
+						<LocationSettings />
+					</section>
 				) : view === 'collections' ? (
-					<CollectionsPanel collectionId={collectionId} profiles={profiles} photos={photos} onOpenPhoto={setSelectedPhoto} />
+					<CollectionsPanel collectionId={collectionId} profiles={profiles} photos={photos} onOpenPhoto={setSelectedPhoto} onPhotoAdded={loadFamilyData} />
 				) : view === 'tree' ? (
 					<section className="page-body">
 						<div className="page-heading">
@@ -988,7 +1006,11 @@ function PhotoGrid({ photos, profiles, onOpen }: { photos: PhotoDocument[]; prof
 				return (
 					<button className={`photo-card card-tint-${index % 4}`} key={photo.$id} onClick={() => onOpen(photo)}>
 						<span className="photo-image-wrap"><img src={photo.imageUrl} alt={photo.title || `Family memory from ${photo.year}`} loading="lazy" /><span className="photo-year">{photo.year}</span></span>
-						<span className="photo-card-content"><span className="photo-title">{photo.title || 'A moment together'}</span><span className="photo-tags">{tagged.length ? tagged.map((profile) => profile.name.split(' ')[0]).join(' · ') : 'A family memory'}</span></span>
+						<span className="photo-card-content">
+							<span className="photo-title">{photo.title || 'A moment together'}</span>
+							<span className="photo-tags">{tagged.length ? tagged.map((profile) => profile.name.split(' ')[0]).join(' · ') : 'A family memory'}</span>
+							{photo.countryCode && <span className="photo-location">{countryName(photo.countryCode)}</span>}
+						</span>
 					</button>
 				);
 			})}
@@ -1005,6 +1027,16 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 	const [newProfileName, setNewProfileName] = useState('');
 	const [newProfileBirthDate, setNewProfileBirthDate] = useState('');
 	const [availableProfiles, setAvailableProfiles] = useState(profiles);
+	const [defaultCountry, setDefaultCountry] = useState('IE');
+	const [countryCode, setCountryCode] = useState<string | null>(null);
+
+	useEffect(() => {
+		void createSupabaseClient().auth.getUser().then(async ({ data }) => {
+			if (!data.user) return;
+			const result = await createSupabaseClient().from('profiles').select('default_country_code').eq('user_id', data.user.id).single();
+			if (!result.error && result.data?.default_country_code) setDefaultCountry(result.data.default_country_code);
+		});
+	}, []);
 
 	async function createProfile() {
 		setError('');
@@ -1088,6 +1120,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 				year: Number(data.get('year')),
 				uploaded_by: userData.user.id,
 				tagged_profiles: selectedIds,
+				country_code: countryCode,
 			});
 			if (photoError) throw photoError;
 			photoSaved = true;
@@ -1114,6 +1147,7 @@ function UploadDialog({ profiles, onClose, onCreated }: { profiles: ProfileDocum
 				<form className="upload-form" onSubmit={upload}>
 					<label>Choose a photo<input name="photo" type="file" accept="image/*" required /></label>
 					<div className="form-two"><label>Give it a little title<input name="title" placeholder="Sunday at grandma’s" /></label><label>What year was it?<input name="year" type="number" min="1800" max={new Date().getFullYear()} defaultValue={new Date().getFullYear()} required /></label></div>
+					<UploadCountrySelector defaultCountry={defaultCountry} value={countryCode} onChange={setCountryCode} />
 					<div className="tagging-block"><label htmlFor="profile-search">Who’s in this memory?</label><input id="profile-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search family members…" />{selectedIds.length > 0 && <div className="selected-tags">{selectedIds.map((id) => { const profile = availableProfiles.find((person) => person.$id === id); return profile ? <button type="button" className="tag-chip selected" key={id} onClick={() => setSelectedIds((current) => current.filter((item) => item !== id))}>{profile.name} <span>×</span></button> : null; })}</div>}<div className="profile-options">{filteredProfiles.map((profile) => <button type="button" className={`tag-chip ${selectedIds.includes(profile.$id) ? 'selected' : ''}`} key={profile.$id} onClick={() => setSelectedIds((current) => current.includes(profile.$id) ? current.filter((id) => id !== profile.$id) : [...current, profile.$id])}>{profile.name}</button>)}</div>{!filteredProfiles.length && search && <button className="text-link inline-link" type="button" onClick={() => { setNewProfileName(search); setCreatingProfile(true); }}>+ Add “{search}” as a new family member</button>}</div>
 					{creatingProfile && <div className="inline-profile-form"><label>New family member’s name<input autoFocus value={newProfileName} onChange={(event) => setNewProfileName(event.target.value)} required /></label><label>Birth date (optional)<input type="date" max={new Date().toISOString().slice(0, 10)} value={newProfileBirthDate} onChange={(event) => setNewProfileBirthDate(event.target.value)} /></label><button className="button button-quiet" type="button" onClick={createProfile}>Create profile</button><button className="text-link" type="button" onClick={() => setCreatingProfile(false)}>Cancel</button></div>}
 					{error && <p className="form-error" role="alert">{error}</p>}

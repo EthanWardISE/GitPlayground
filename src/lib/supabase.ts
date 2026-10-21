@@ -48,3 +48,19 @@ export function getSupabaseErrorMessage(error: unknown, fallback = 'Something we
 }
 
 export const PHOTO_BUCKET = 'family-photos';
+
+export async function getResolvedPhotos() {
+	const { data, error } = await createSupabaseClient().rpc('get_photos_with_resolved_country');
+	if (error) throw error;
+	return data;
+}
+
+export async function updateDefaultCountry(countryCode: string) {
+	const user = (await createSupabaseClient().auth.getUser()).data.user;
+	if (!user) throw new Error('You must be signed in to update location settings.');
+	const { error } = await createSupabaseClient()
+		.from('profiles')
+		.update({ default_country_code: countryCode.toUpperCase() })
+		.eq('user_id', user.id);
+	if (error) throw error;
+}

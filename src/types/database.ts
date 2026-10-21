@@ -15,6 +15,7 @@ export type ProfileRow = {
 	user_id: string | null;
 	birth_date: string | null;
 	created_at: string;
+	default_country_code: string;
 };
 
 export type PhotoRow = {
@@ -25,6 +26,7 @@ export type PhotoRow = {
 	uploaded_by: string;
 	tagged_profiles: string[];
 	created_at: string;
+	country_code: string | null;
 };
 
 export type CommentRow = {
@@ -74,6 +76,11 @@ export type TreePositionRow = {
 	y: number;
 	updated_by: string;
 	updated_at: string;
+	country_code: string | null;
+};
+
+export type ResolvedPhotoRow = PhotoRow & {
+	country_source: 'photo' | 'collection' | 'profile';
 };
 
 export type CollectionRow = {
@@ -121,6 +128,7 @@ export interface PhotoDocument {
 	year: number;
 	uploadedBy: string;
 	taggedProfiles: string[];
+	countryCode?: string;
 	imageUrl: string;
 }
 
@@ -163,6 +171,7 @@ export interface Database {
 					user_id?: string | null;
 					birth_date?: string | null;
 					created_at?: string;
+					default_country_code?: string;
 				};
 				Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
 				Relationships: [];
@@ -177,6 +186,7 @@ export interface Database {
 					uploaded_by: string;
 					tagged_profiles?: string[];
 					created_at?: string;
+					country_code?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['photos']['Insert']>;
 				Relationships: [];
@@ -246,6 +256,7 @@ export interface Database {
 					y: number;
 					updated_by?: string;
 					updated_at?: string;
+					country_code?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['tree_positions']['Insert']>;
 				Relationships: [];
@@ -292,6 +303,10 @@ export interface Database {
 		};
 		Views: { [_ in never]: never };
 		Functions: {
+			get_photos_with_resolved_country: {
+				Args: Record<string, never>;
+				Returns: ResolvedPhotoRow[];
+			};
 			is_family_member: {
 				Args: Record<string, never>;
 				Returns: boolean;
