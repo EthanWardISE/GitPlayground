@@ -139,6 +139,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .mobile-nav { display: none; }
 .sidebar { position: fixed; z-index: 3; top: 0; bottom: 0; left: 0; display: flex; width: 248px; flex-direction: column; padding: 29px 17px 18px; border-right: 1px solid var(--line); background: #fffefa; }
 .sidebar .brand { padding: 0 8px; }
+.family-switcher { display: grid; gap: 5px; margin: 20px 8px 0; color: #aaa79d; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.family-switcher select { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid #e7e5de; border-radius: 8px; background: #fffefa; color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.topbar .family-switcher { display: flex; align-items: center; margin: 0; }
+.topbar .family-switcher span { display: none; }
+.topbar .family-switcher select { max-width: 170px; }
+.family-create-form { display: grid; width: min(360px, 100%); gap: 12px; margin: 20px 0 18px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #fffefa; text-align: left; }
+.family-create-form label { display: grid; gap: 7px; color: #57564f; font-size: 12px; font-weight: 700; }
+.family-create-form input { width: 100%; height: 42px; padding: 0 11px; border: 1px solid #e7e5de; border-radius: 8px; background: #fff; color: var(--ink); }
+.family-management { display: grid; max-width: 500px; gap: 10px; margin-bottom: 18px; padding: 22px 28px; border: 1px solid var(--line); border-radius: 16px; background: #fffefa; }
+.family-management h2 { margin: 0; font-family: var(--serif); font-size: 25px; font-weight: 400; }
+.family-management p { margin: 0; }
+.family-management form { display: flex; align-items: end; gap: 10px; }
+.family-management label, .invite-link-field { display: grid; min-width: 0; flex: 1; gap: 6px; color: #57564f; font-size: 12px; font-weight: 700; }
+.family-management input { width: 100%; height: 40px; padding: 0 10px; border: 1px solid #e7e5de; border-radius: 8px; background: #fff; color: var(--ink); }
+.invite-link-field { flex: none; }
 .sidebar-section-label { display: flex; justify-content: space-between; margin: 42px 11px 11px; color: #aaa79d; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; }
 .sidebar-section-label span { color: #8e8b80; }
 .side-nav { display: grid; gap: 4px; }

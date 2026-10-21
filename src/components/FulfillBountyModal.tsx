@@ -3,10 +3,11 @@ import { createBountyPhotobook, resolveBounty, submitExistingPhotos, uploadAndSu
 import { getSupabaseErrorMessage } from '../lib/supabase';
 import type { PhotoDocument } from '../types/database';
 
-export default function FulfillBountyModal({ bounty, photos, userId, onClose, onSubmitted }: {
+export default function FulfillBountyModal({ bounty, photos, userId, familyId, onClose, onSubmitted }: {
 	bounty: Bounty;
 	photos: PhotoDocument[];
 	userId: string;
+	familyId: string;
 	onClose: () => void;
 	onSubmitted: (photoIds: string[]) => void;
 }) {
@@ -29,7 +30,7 @@ export default function FulfillBountyModal({ bounty, photos, userId, onClose, on
 				await submitExistingPhotos(bounty.id, photoIds, userId);
 			} else {
 				if (!files.length) throw new Error('Choose at least one image before submitting.');
-				const result = await uploadAndSubmitPhotos(bounty.id, userId, files, Number(form.get('year')), String(form.get('title') ?? ''));
+				const result = await uploadAndSubmitPhotos(bounty.id, userId, familyId, files, Number(form.get('year')), String(form.get('title') ?? ''));
 				photoIds = result.photos.map((photo) => photo.id);
 			}
 			await resolveBounty(bounty.id);

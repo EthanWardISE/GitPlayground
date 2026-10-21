@@ -7,12 +7,14 @@ type CollectionPhoto = { collection_id: string; photo_id: string };
 
 export default function CollectionsPanel({
 	collectionId,
+	familyId,
 	profiles,
 	photos,
 	onOpenPhoto,
 	onPhotoAdded,
 }: {
 	collectionId?: string;
+	familyId: string;
 	profiles: ProfileDocument[];
 	photos: PhotoDocument[];
 	onOpenPhoto: (photo: PhotoDocument) => void;
@@ -158,7 +160,7 @@ export default function CollectionsPanel({
 				const { data: userData, error: userError } = await supabase.auth.getUser();
 				if (userError) throw userError;
 				if (!userData.user) throw new Error('Your session expired. Sign in again before uploading.');
-				filePath = `${userData.user.id}/${crypto.randomUUID()}.${extension}`;
+				filePath = `families/${familyId}/photos/${userData.user.id}/${crypto.randomUUID()}.${extension}`;
 				const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).upload(filePath, uploadFile, {
 					contentType: uploadFile.type,
 					upsert: false,

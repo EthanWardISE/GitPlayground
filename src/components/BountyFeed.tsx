@@ -5,7 +5,7 @@ import type { PhotoDocument } from '../types/database';
 import BountyCard from './BountyCard';
 import FulfillBountyModal from './FulfillBountyModal';
 
-export default function BountyFeed({ photos, userId, isAdmin }: { photos: PhotoDocument[]; userId: string; isAdmin: boolean }) {
+export default function BountyFeed({ photos, userId, familyId, isAdmin }: { photos: PhotoDocument[]; userId: string; familyId: string; isAdmin: boolean }) {
 	const [tab, setTab] = useState<'open' | 'resolved'>('open');
 	const [bounties, setBounties] = useState<Bounty[]>([]);
 	const [selectedBounty, setSelectedBounty] = useState<Bounty | null>(null);
@@ -68,7 +68,7 @@ export default function BountyFeed({ photos, userId, isAdmin }: { photos: PhotoD
 			<div className="bounty-tabs" role="tablist"><button className={tab === 'open' ? 'active' : ''} type="button" onClick={() => setTab('open')}>Open requests</button><button className={tab === 'resolved' ? 'active' : ''} type="button" onClick={() => setTab('resolved')}>Fulfilled memories</button></div>
 			{error && <p className="form-error bounty-error" role="alert">{error}</p>}
 			{loading ? <p className="muted">Looking through the family requests…</p> : bounties.length ? <div className="bounty-grid">{bounties.map((bounty) => <BountyCard key={bounty.id} bounty={bounty} onFulfill={tab === 'open' ? setSelectedBounty : undefined} onDelete={deletingId || (!isAdmin && bounty.requested_by !== userId) ? undefined : removeBounty} />)}</div> : <div className="bounty-empty"><h2>{tab === 'open' ? 'No open requests yet' : 'No fulfilled memories yet'}</h2><p>{tab === 'open' ? 'Be the first to ask the family for a missing memory.' : 'When someone finds a missing moment, it will live here.'}</p></div>}
-			{selectedBounty && <FulfillBountyModal bounty={selectedBounty} photos={photos} userId={userId} onClose={() => setSelectedBounty(null)} onSubmitted={completed} />}
+			{selectedBounty && <FulfillBountyModal bounty={selectedBounty} photos={photos} userId={userId} familyId={familyId} onClose={() => setSelectedBounty(null)} onSubmitted={completed} />}
 			{showCreate && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}><section className="modal-card bounty-modal" role="dialog" aria-modal="true" aria-labelledby="request-bounty-heading"><header className="modal-header"><div><div className="eyebrow">Call in the family</div><h2 id="request-bounty-heading">Request a memory</h2></div><button className="icon-button" type="button" onClick={() => setShowCreate(false)} aria-label="Close">×</button></header><form className="upload-form" onSubmit={requestMemory}><label>What are you looking for?<input name="title" placeholder="The 1990 kitchen renovation" required maxLength={160} /></label><label>Tell the family more<textarea name="description" rows={5} placeholder="Any details, people, or places that might help…" required maxLength={4000} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button className="button button-quiet" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="button button-primary" type="submit" disabled={saving}>{saving ? 'Posting…' : 'Post request'}</button></div></form></section></div>}
 			{celebrate && <div className="bounty-celebration" role="status" aria-live="polite"><span>✦</span><strong>Memory found!</strong><small>The family story just got a little fuller.</small></div>}
 		</section>

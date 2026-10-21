@@ -6,8 +6,24 @@ export type Json =
 	| { [key: string]: Json | undefined }
 	| Json[];
 
+export type FamilyRow = {
+	id: string;
+	name: string;
+	created_by: string;
+	created_at: string;
+};
+
+export type FamilyMemberRow = {
+	family_id: string;
+	user_id: string;
+	full_name: string;
+	role: 'admin' | 'member';
+	created_at: string;
+};
+
 export type ProfileRow = {
 	id: string;
+	family_id: string;
 	name: string;
 	avatar_file_path: string | null;
 	bio: string | null;
@@ -20,6 +36,7 @@ export type ProfileRow = {
 
 export type PhotoRow = {
 	id: string;
+	family_id: string;
 	title: string | null;
 	file_path: string;
 	year: number;
@@ -31,6 +48,7 @@ export type PhotoRow = {
 
 export type CommentRow = {
 	id: string;
+	family_id: string;
 	photo_id: string;
 	author_id: string;
 	author_name: string;
@@ -40,6 +58,7 @@ export type CommentRow = {
 
 export type BountyRow = {
 	id: string;
+	family_id: string;
 	title: string;
 	description: string;
 	status: 'open' | 'resolved';
@@ -50,6 +69,7 @@ export type BountyRow = {
 
 export type BountySubmissionRow = {
 	id: string;
+	family_id: string;
 	bounty_id: string;
 	photo_id: string;
 	submitted_by: string;
@@ -58,6 +78,7 @@ export type BountySubmissionRow = {
 
 export type PersonRelationshipRow = {
 	id: string;
+	family_id: string;
 	person_a: string;
 	person_b: string;
 	relationship_type: 'parent' | 'step_parent' | 'guardian' | 'spouse' | 'sibling';
@@ -71,6 +92,7 @@ export type PersonRelationshipRow = {
 };
 
 export type TreePositionRow = {
+	family_id: string;
 	profile_id: string;
 	x: number;
 	y: number;
@@ -85,6 +107,7 @@ export type ResolvedPhotoRow = PhotoRow & {
 
 export type CollectionRow = {
 	id: string;
+	family_id: string;
 	title: string;
 	description: string | null;
 	cover_photo_id: string | null;
@@ -94,6 +117,7 @@ export type CollectionRow = {
 };
 
 export type CollectionPhotoRow = {
+	family_id: string;
 	collection_id: string;
 	photo_id: string;
 	added_by: string;
@@ -102,6 +126,7 @@ export type CollectionPhotoRow = {
 
 export type ProfileClaimRequestRow = {
 	id: string;
+	family_id: string;
 	profile_id: string;
 	claimant_id: string;
 	status: 'pending' | 'approved' | 'rejected';
@@ -145,13 +170,9 @@ export interface Database {
 	public: {
 		Tables: {
 			family_members: {
-				Row: {
-					user_id: string;
-					full_name: string;
-					role: 'admin' | 'member';
-					created_at: string;
-				};
+				Row: FamilyMemberRow;
 				Insert: {
+					family_id: string;
 					user_id: string;
 					full_name: string;
 					role?: 'admin' | 'member';
@@ -160,9 +181,36 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['family_members']['Insert']>;
 				Relationships: [];
 			};
+			families: {
+				Row: FamilyRow;
+				Insert: {
+					family_id?: string;
+					id?: string;
+					name: string;
+					created_by: string;
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['families']['Insert']>;
+				Relationships: [];
+			};
+			user_family_context: {
+				Row: {
+					user_id: string;
+					family_id: string;
+					updated_at: string;
+				};
+				Insert: {
+					user_id: string;
+					family_id: string;
+					updated_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['user_family_context']['Insert']>;
+				Relationships: [];
+			};
 			profiles: {
 				Row: ProfileRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					name: string;
 					avatar_file_path?: string | null;
@@ -179,6 +227,7 @@ export interface Database {
 			photos: {
 				Row: PhotoRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					title?: string | null;
 					file_path: string;
@@ -194,6 +243,7 @@ export interface Database {
 			comments: {
 				Row: CommentRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					photo_id: string;
 					author_id: string;
@@ -207,6 +257,7 @@ export interface Database {
 			bounties: {
 				Row: BountyRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					title: string;
 					description: string;
@@ -221,6 +272,7 @@ export interface Database {
 			bounty_submissions: {
 				Row: BountySubmissionRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					bounty_id: string;
 					photo_id: string;
@@ -233,6 +285,7 @@ export interface Database {
 			person_relationships: {
 				Row: PersonRelationshipRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					person_a: string;
 					person_b: string;
@@ -264,6 +317,7 @@ export interface Database {
 			profile_claim_requests: {
 				Row: ProfileClaimRequestRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					profile_id: string;
 					claimant_id: string;
@@ -278,6 +332,7 @@ export interface Database {
 			collections: {
 				Row: CollectionRow;
 				Insert: {
+					family_id?: string;
 					id?: string;
 					title: string;
 					description?: string | null;
@@ -292,6 +347,7 @@ export interface Database {
 			collection_photos: {
 				Row: CollectionPhotoRow;
 				Insert: {
+					family_id?: string;
 					collection_id: string;
 					photo_id: string;
 					added_by?: string;
@@ -306,10 +362,6 @@ export interface Database {
 			get_photos_with_resolved_country: {
 				Args: Record<string, never>;
 				Returns: ResolvedPhotoRow[];
-			};
-			is_family_member: {
-				Args: Record<string, never>;
-				Returns: boolean;
 			};
 			request_profile_claim: {
 				Args: { p_profile_id: string };
@@ -338,6 +390,30 @@ export interface Database {
 			resolve_bounty: {
 				Args: { p_bounty_id: string };
 				Returns: undefined;
+			};
+			current_family_id: {
+				Args: Record<string, never>;
+				Returns: string | null;
+			};
+			is_family_member: {
+				Args: { p_family_id?: string | null };
+				Returns: boolean;
+			};
+			create_family: {
+				Args: { p_name: string };
+				Returns: string;
+			};
+			switch_family: {
+				Args: { p_family_id: string };
+				Returns: undefined;
+			};
+			create_family_invitation: {
+				Args: { p_family_id: string; p_email: string };
+				Returns: { invitation_id: string; invitation_token: string }[];
+			};
+			accept_family_invitation: {
+				Args: { p_token: string };
+				Returns: string;
 			};
 		};
 		Enums: { [_ in never]: never };
