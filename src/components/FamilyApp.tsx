@@ -7,6 +7,8 @@ import FamilyTreeCanvas from './FamilyTreeCanvas';
 import KinfolkWorldMap from './KinfolkWorldMap';
 import UploadCountrySelector from './UploadCountrySelector';
 import LocationSettings from './LocationSettings';
+import Messenger from './Messenger';
+import ReportReviewPanel from './ReportReviewPanel';
 import { countryName, normalizeCountryCode } from '../lib/countries';
 import type { CommentDocument, CommentRow, FamilyRow, PhotoDocument, ProfileClaimRequestRow, ProfileDocument, ProfileRow } from '../types/database';
 
@@ -18,12 +20,12 @@ interface AppUser {
 }
 
 interface FamilyAppProps {
-	view?: 'feed' | 'tree' | 'person' | 'collections' | 'bounties' | 'map' | 'settings';
+	view?: 'feed' | 'tree' | 'person' | 'collections' | 'bounties' | 'map' | 'settings' | 'messenger';
 	personId?: string;
 	collectionId?: string;
 }
 
-function AppIcon({ name, size = 20 }: { name: 'home' | 'tree' | 'book' | 'plus' | 'search' | 'bullseye' | 'settings' | 'arrow' | 'image' | 'close' | 'lock' | 'logout'; size?: number }) {
+export function AppIcon({ name, size = 20 }: { name: 'home' | 'tree' | 'book' | 'plus' | 'search' | 'bullseye' | 'settings' | 'arrow' | 'image' | 'bubble' | 'close' | 'lock' | 'logout'; size?: number }) {
 	const paths: Record<typeof name, string> = {
 		home: 'M3 10.5 12 3l9 7.5M5 9v11h14V9M9 20v-6h6v6',
 		tree: 'M12 21v-7m0-4V3m0 7-5-4m5 4 5-4M5 7l-2 2m14-2 2 2M9 14H6m9 0h3',
@@ -34,6 +36,7 @@ function AppIcon({ name, size = 20 }: { name: 'home' | 'tree' | 'book' | 'plus' 
 		settings: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z',
 		arrow: 'M5 12h14m-7-7 7 7-7 7',
 		image: 'M4 5h16v14H4zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm11.5 5-5-5-8 9',
+		bubble: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 12.5z',
 		close: 'm18 6-12 12M6 6l12 12',
 		lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
 		logout: 'M10 17l5-5-5-5m5 5H3m9-9h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7',
@@ -383,7 +386,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 		}
 	}
 
-	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : view === 'map' ? 'Memory map' : view === 'settings' ? 'General settings' : 'The family album';
+	const pageTitle = view === 'tree' ? 'Our family tree' : view === 'person' ? selectedPerson?.name ?? 'Family member' : view === 'collections' ? 'Family photobooks' : view === 'bounties' ? 'Memory bounties' : view === 'map' ? 'Memory map' : view === 'settings' ? 'General settings' : view === 'messenger' ? 'Messages' : 'The family album';
 
 	if (status === 'loading') {
 		return <main className="screen-state"><img className="loading-logo" src="/logo.svg" alt="" /><p className="loading-message">Gathering your family memories…</p></main>;
@@ -490,6 +493,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 					<a href="/collections" className={`nav-link ${view === 'collections' ? 'active' : ''}`} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" /> Photobooks</a>
 					<a href="/map" className={`nav-link ${view === 'map' ? 'active' : ''}`} aria-current={view === 'map' ? 'page' : undefined}><AppIcon name="search" /> Memory map</a>
 					<a href="/bounties" className={`nav-link ${view === 'bounties' ? 'active' : ''}`} aria-current={view === 'bounties' ? 'page' : undefined}><AppIcon name="bullseye" /> Memory bounties</a>
+					<a href="/messenger" className={`nav-link ${view === 'messenger' ? 'active' : ''}`} aria-current={view === 'messenger' ? 'page' : undefined}><AppIcon name="bubble" /> Messages</a>
 					<a href="/settings" className={`nav-link nav-link-secondary ${view === 'settings' ? 'active' : ''}`} aria-current={view === 'settings' ? 'page' : undefined}><AppIcon name="settings" size={17} /> General settings</a>
 				</nav>
 				<div className="sidebar-family">
@@ -517,6 +521,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				<a href="/collections" className={view === 'collections' ? 'active' : ''} aria-current={view === 'collections' ? 'page' : undefined}><AppIcon name="book" size={19} /><span>Photobooks</span></a>
 				<a href="/map" className={view === 'map' ? 'active' : ''} aria-current={view === 'map' ? 'page' : undefined}><AppIcon name="search" size={19} /><span>Map</span></a>
 				<a href="/bounties" className={view === 'bounties' ? 'active' : ''} aria-current={view === 'bounties' ? 'page' : undefined}><AppIcon name="bullseye" size={19} /><span>Bounties</span></a>
+				<a href="/messenger" className={view === 'messenger' ? 'active' : ''} aria-current={view === 'messenger' ? 'page' : undefined}><AppIcon name="bubble" size={19} /><span>Messages</span></a>
 				<a href="/settings" className={view === 'settings' ? 'active' : ''} aria-current={view === 'settings' ? 'page' : undefined}><AppIcon name="settings" size={19} /><span>Settings</span></a>
 				<button type="button" onClick={signOut} aria-label={`Sign out${user?.name ? ` of ${user.name}` : ''}`}><AppIcon name="logout" size={19} /><span>Sign out</span></button>
 			</nav>
@@ -532,7 +537,9 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 				</header>
 				{loadWarning && <p className="load-warning" role="status">{loadWarning}</p>}
 
-				{view === 'bounties' ? (
+				{view === 'messenger' ? (
+					<Messenger userId={user?.$id ?? ''} familyId={activeFamilyId} photos={photos} onOpenPhoto={setSelectedPhoto} />
+				) : view === 'bounties' ? (
 					<BountyFeed photos={photos} userId={user?.$id ?? ''} familyId={activeFamilyId} isAdmin={isAdmin} />
 				) : view === 'map' ? (
 					<KinfolkWorldMap />
@@ -543,6 +550,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 						</div>
 						<FamilyManagement familyId={activeFamilyId} isAdmin={isAdmin} />
 						{isAdmin && <ClaimRequestsPanel familyId={activeFamilyId} profiles={profiles} onReviewed={loadFamilyData} />}
+						{isAdmin && <ReportReviewPanel familyId={activeFamilyId} />}
 						<section className="family-management">
 							<div className="eyebrow">Another space</div>
 							<h2>Create a new family</h2>
