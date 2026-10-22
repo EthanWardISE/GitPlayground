@@ -135,6 +135,57 @@ export type ProfileClaimRequestRow = {
 	created_at: string;
 };
 
+export type ChatRow = {
+	id: string;
+	family_id: string;
+	type: 'direct' | 'group';
+	name: string | null;
+	created_by: string;
+	created_at: string;
+};
+
+export type ChatParticipantRow = {
+	chat_id: string;
+	user_id: string;
+	role: 'admin' | 'member';
+	joined_at: string;
+};
+
+export type MessageRow = {
+	id: string;
+	chat_id: string;
+	sender_id: string;
+	content: string;
+	attached_photo_id: string | null;
+	is_deleted: boolean;
+	created_at: string;
+};
+
+export type MessageReadRow = {
+	message_id: string;
+	user_id: string;
+	read_at: string;
+};
+
+export type MessageReactionEmoji = '❤️' | '😂' | '😊' | '😮' | '😢' | '👏' | '🙏' | '🎉';
+
+export type MessageReactionRow = {
+	message_id: string;
+	user_id: string;
+	emoji: MessageReactionEmoji;
+	created_at: string;
+};
+
+export type ReportRow = {
+	id: string;
+	message_id: string;
+	reported_by: string;
+	family_id: string;
+	reason: string;
+	status: 'open' | 'reviewed' | 'dismissed' | 'resolved';
+	created_at: string;
+};
+
 export interface ProfileDocument {
 	$id: string;
 	name: string;
@@ -356,6 +407,69 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['collection_photos']['Insert']>;
 				Relationships: [];
 			};
+			chats: {
+				Row: ChatRow;
+				Insert: {
+					id?: string;
+					family_id: string;
+					type: ChatRow['type'];
+					name?: string | null;
+					created_by: string;
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['chats']['Insert']>;
+				Relationships: [];
+			};
+			chat_participants: {
+				Row: ChatParticipantRow;
+				Insert: {
+					chat_id: string;
+					user_id: string;
+					role?: ChatParticipantRow['role'];
+					joined_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['chat_participants']['Insert']>;
+				Relationships: [];
+			};
+			messages: {
+				Row: MessageRow;
+				Insert: {
+					id?: string;
+					chat_id: string;
+					sender_id: string;
+					content: string;
+					attached_photo_id?: string | null;
+					is_deleted?: boolean;
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['messages']['Insert']>;
+				Relationships: [];
+			};
+			message_reads: {
+				Row: MessageReadRow;
+				Insert: MessageReadRow;
+				Update: Partial<MessageReadRow>;
+				Relationships: [];
+			};
+			message_reactions: {
+				Row: MessageReactionRow;
+				Insert: MessageReactionRow;
+				Update: Partial<MessageReactionRow>;
+				Relationships: [];
+			};
+			reports: {
+				Row: ReportRow;
+				Insert: {
+					id?: string;
+					message_id: string;
+					reported_by: string;
+					family_id: string;
+					status?: ReportRow['status'];
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['reports']['Insert']>;
+				Relationships: [];
+			};
 		};
 		Views: { [_ in never]: never };
 		Functions: {
@@ -414,6 +528,22 @@ export interface Database {
 			accept_family_invitation: {
 				Args: { p_token: string };
 				Returns: string;
+			};
+			remove_chat_participant: {
+				Args: { p_chat_id: string; p_user_id: string };
+				Returns: undefined;
+			};
+			add_chat_participant: {
+				Args: { p_chat_id: string; p_user_id: string; p_role?: 'admin' | 'member' };
+				Returns: undefined;
+			};
+			report_chat_message: {
+				Args: { p_message_id: string; p_reason: string };
+				Returns: string;
+			};
+			resolve_chat_report: {
+				Args: { p_report_id: string };
+				Returns: undefined;
 			};
 		};
 		Enums: { [_ in never]: never };
