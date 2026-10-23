@@ -311,7 +311,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .report-reasons button.active, .report-tabs button.active { border-color: var(--green); background: #dce5d8; color: var(--green-dark); font-weight: 700; }
 .report-modal { padding: 22px; }
 .report-modal > textarea { width: 100%; resize: vertical; padding: 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); }
-.report-review-panel { margin-top: 20px; }
+.report-review-panel { margin-top: 0; }
 .report-review-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
 .report-review-row strong { color: var(--ink); font-size: 13px; }
 .report-review-row p { margin: 4px 0; color: var(--muted); font-size: 12px; }
@@ -382,7 +382,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .avatar-crop-controls > img { width: 78px; height: 78px; grid-row: span 3; border-radius: 50%; object-fit: cover; }
 .avatar-crop-controls label { display: grid; gap: 2px; color: #6c695f; font-size: 10px; }
 .avatar-crop-controls input { width: 100%; accent-color: var(--green); }
-.claim-review-panel { position: fixed; z-index: 6; right: 18px; bottom: 18px; width: min(450px, calc(100vw - 36px)); max-height: 34vh; overflow: auto; padding: 14px 16px; border: 1px solid #e8e4da; border-radius: 13px; background: #fffefa; box-shadow: 0 10px 36px #29261f26; }
+.admin-review-tools { display: grid; gap: 20px; margin-top: 20px; margin-bottom: 48px; }
+.admin-review-heading { margin-bottom: -4px; }
+.admin-review-tools .claim-review-panel { position: static; width: auto; max-height: none; overflow: visible; }
+.claim-review-panel { padding: 14px 16px; border: 1px solid #e8e4da; border-radius: 13px; background: #fffefa; box-shadow: 0 10px 36px #29261f26; }
 .claim-review-heading { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .claim-review-heading small { color: #8b887f; font-size: 10px; }
 .claim-review-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); color: #6c695f; font-size: 11px; }
@@ -636,7 +639,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 	.collection-create > div { grid-column: auto; }
 	.collection-tools > label { width: 100%; }
 	.collection-tools select { width: 100%; max-width: none; }
-	.claim-review-panel { max-height: 42vh; }
 	.claim-review-row { align-items: flex-start; flex-direction: column; }
 	.welcome-banner { min-height: 240px; padding: 19px; }
 	.welcome-copy { width: 84%; }
@@ -659,5 +661,4 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 	.upload-modal { padding: 15px; }
 	.detail-heading { padding-right: 34px; }
 	.detail-heading .button { min-height: 40px; padding: 0 10px; font-size: 11px; }
-	.claim-review-panel { right: 12px; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 24px); }
 }

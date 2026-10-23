@@ -549,8 +549,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 							<div><div className="eyebrow">Make Kinfolk feel like yours</div><h1>General settings</h1><p className="muted">Manage your family album preferences.</p></div>
 						</div>
 						<FamilyManagement familyId={activeFamilyId} isAdmin={isAdmin} />
-						{isAdmin && <ClaimRequestsPanel familyId={activeFamilyId} profiles={profiles} onReviewed={loadFamilyData} />}
-						{isAdmin && <ReportReviewPanel familyId={activeFamilyId} />}
+						{isAdmin && <div className="admin-review-tools"><div className="admin-review-heading"><div className="eyebrow">Admin tools</div></div><ClaimRequestsPanel familyId={activeFamilyId} profiles={profiles} onReviewed={loadFamilyData} /><ReportReviewPanel familyId={activeFamilyId} /></div>}
 						<section className="family-management">
 							<div className="eyebrow">Another space</div>
 							<h2>Create a new family</h2>
@@ -1065,7 +1064,7 @@ function ClaimRequestsPanel({ familyId, profiles, onReviewed }: { familyId: stri
 
 	return (
 		<section className="claim-review-panel">
-			<div className="claim-review-heading"><div className="eyebrow">Admin tools</div><strong>Profile claim requests</strong><small>Verify a claimant’s identity before approving.</small></div>
+			<div className="claim-review-heading"><strong>Profile claim requests</strong><small>Verify a claimant’s identity before approving.</small></div>
 			{error && <p className="form-error" role="alert">{error}</p>}
 			{requests.length === 0 && !error && <p className="muted">No pending profile claims.</p>}
 			{requests.map((request) => (
