@@ -1,4 +1,5 @@
 ---
+import AppTheme from '../../components/AppTheme.astro';
 import FamilyApp from '../../components/FamilyApp';
 import '../../styles/family.css';
 
@@ -9,6 +10,7 @@ const { id } = Astro.params;
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
+		<AppTheme />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="description" content="Family member profile and shared memories." />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />

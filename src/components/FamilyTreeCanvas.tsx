@@ -294,7 +294,7 @@ export default function FamilyTreeCanvas({ profiles }: { profiles: ProfileDocume
 						minZoom={0.15}
 						maxZoom={1.5}
 					>
-						<Background color="#e9e2d5" gap={24} />
+						<Background color="var(--tree-dots, #e9e2d5)" gap={24} />
 						<Controls />
 					</ReactFlow>
 				)}
