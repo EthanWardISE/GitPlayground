@@ -247,6 +247,14 @@ import FamilyApp from '../components/FamilyApp';
 <FamilyApp client:load />
 ```
 
+## Unit tests
+
+Run `npm test` from the repository root for the Vitest unit suite, or `npm run test:watch` while developing. Tests live beside their helpers in `src/lib/*.test.ts` and cover Supabase configuration and errors, bounty loading and upload cleanup, and family-tree age and relationship calculations.
+
+Supabase calls are mocked: these tests need no credentials, running server, or network access. Database permissions and family isolation require separate integration tests against Supabase.
+
+The infrastructure suite remains separate: run `npm ci` and `npm test -- --runInBand` inside `cdk/`. It checks the S3 bucket, CloudFront origin access, and deployment cache invalidation using a synthesized template; it does not deploy resources or require AWS credentials.
+
 ## Repository map
 
 ```text
