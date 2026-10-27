@@ -1,3 +1,5 @@
+import AppearanceSettings from './AppearanceSettings';
+import { initializeTheme } from '../lib/theme';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { configureSupabaseClient, createSupabaseClient, getSupabaseErrorMessage, PHOTO_BUCKET } from '../lib/supabase';
@@ -115,6 +117,7 @@ function toComment(comment: CommentRow): CommentDocument {
 }
 
 export default function FamilyApp({ view = 'feed', personId, collectionId }: FamilyAppProps) {
+	useEffect(() => initializeTheme(), []);
 	const [status, setStatus] = useState<AppStatus>('loading');
 	const [user, setUser] = useState<AppUser | null>(null);
 	const [isAdmin, setIsAdmin] = useState(false);
@@ -548,6 +551,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 						<div className="page-heading">
 							<div><div className="eyebrow">Make Kinfolk feel like yours</div><h1>General settings</h1><p className="muted">Manage your family album preferences.</p></div>
 						</div>
+						<AppearanceSettings />
 						<FamilyManagement familyId={activeFamilyId} isAdmin={isAdmin} />
 						{isAdmin && <div className="admin-review-tools"><div className="admin-review-heading"><div className="eyebrow">Admin tools</div></div><ClaimRequestsPanel familyId={activeFamilyId} profiles={profiles} onReviewed={loadFamilyData} /><ReportReviewPanel familyId={activeFamilyId} /></div>}
 						<section className="family-management">
