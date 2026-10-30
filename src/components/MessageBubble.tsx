@@ -31,7 +31,7 @@ export default function MessageBubble({ message, currentUserId, photo, read, onR
 	return (
 		<div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`} onMouseEnter={onRead} onClick={() => setOptionsOpen((open) => !open)}>
 			<div className={`relative max-w-[min(80%,34rem)] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
-				<div className={`rounded-3xl px-4 py-3 shadow-sm ${mine ? 'rounded-br-md bg-kinfolk-moss text-white' : 'rounded-bl-md border border-kinfolk-stone bg-white text-kinfolk-ink'}`}>
+				<div className={`rounded-3xl px-4 py-3 shadow-sm ${mine ? 'rounded-br-md bg-kinfolk-moss text-kinfolk-on-primary' : 'rounded-bl-md border border-kinfolk-stone bg-kinfolk-surface text-kinfolk-ink'}`}>
 					{message.is_deleted ? <p className="kinfolk-message-text italic opacity-70">This memory was removed.</p> : <>
 						{photo && <button type="button" onClick={(event) => { event.stopPropagation(); onOpenPhoto?.(photo); }} className="mb-2 block overflow-hidden rounded-2xl focus:outline-none focus:ring-2 focus:ring-kinfolk-peach"><img src={photo.imageUrl} alt={photo.title || `Shared family memory from ${photo.year}`} className="max-h-72 w-full object-cover" /></button>}
 						{message.content && <p className="kinfolk-message-text whitespace-pre-wrap break-words text-sm leading-6">{message.content}</p>}

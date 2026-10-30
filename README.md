@@ -163,6 +163,14 @@ npm run start     # Run dist/server/entry.mjs
 
 `npm run check` is the smallest quality gate for application changes. Run `npm run build` before creating a deployment artifact.
 
+## Appearance
+
+Choose a palette in **General settings → Appearance**, or use the compact Appearance picker in public page footers and on the sign-in screen. Original Sage, Peach Keepsake, Rose Album, Lavender Letters, Mist Blue, and Evening Hearth apply throughout Kinfolk.
+
+Preferences are saved in this browser under `kinfolk-theme`, restored before first paint, and synced between open tabs. Existing light/dark preferences become Original Sage/Evening Hearth. They do not change another family member’s preferences. When browser storage is blocked, selection still works for the current page.
+
+Palettes live in `src/lib/themes.ts`; shared semantic tokens and picker styles live in `src/styles/themes.css`. Use those tokens for new interface colours. `npm test` includes preference and palette contrast regression checks.
+
 ## Production pipeline
 
 1. **Validate:** install from the lockfile, run `npm run check`, and run the CDK test suite in `cdk/`.

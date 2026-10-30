@@ -1,4 +1,6 @@
 ---
+import ThemePicker from '../components/ThemePicker';
+import ThemeHead from '../components/ThemeHead.astro';
 import { createServerClient } from '@supabase/ssr';
 import '../styles/global.css';
 import HeroSection from '../components/HeroSection.jsx';
@@ -42,6 +44,7 @@ if (supabaseUrl && supabasePublishableKey) {
 <!doctype html>
 <html lang="en">
 	<head>
+		<ThemeHead />
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="description" content="Kinfolk is a private home for the moments your family shares." />
@@ -85,6 +88,6 @@ if (supabaseUrl && supabasePublishableKey) {
 				<div class="section-kicker">Come on in</div><h2>Keep your people<br /><em>close.</em></h2><p>Kinfolk is invite-only, because family is.</p><a class="landing-button landing-button-primary" href="/app">Join your family <span aria-hidden="true">↗</span></a>
 			</section>
 		</main>
-		<footer class="landing-footer"><a class="landing-brand" href="/" aria-label="Kinfolk home"><img src="/logo.svg" alt="" /> <span>kinfolk</span></a><span>Made by Ethan Ward, 2026</span><a href="#about">Back to top ↑</a></footer>
+		<footer class="landing-footer"><a class="landing-brand" href="/" aria-label="Kinfolk home"><img src="/logo.svg" alt="" /> <span>kinfolk</span></a><span>Made by Ethan Ward, 2026</span><a href="#about">Back to top ↑</a><ThemePicker compact client:load /></footer>
 	</body>
 </html>

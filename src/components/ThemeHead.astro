@@ -1,0 +1,6 @@
+---
+import { themeInitScript, themeStyles } from '../lib/themes';
+---
+<!-- Restore the browser preference synchronously, before the page can paint. -->
+<style is:global set:html={themeStyles} />
+<script is:inline set:html={themeInitScript} />

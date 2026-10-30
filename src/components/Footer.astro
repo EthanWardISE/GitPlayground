@@ -1,8 +1,10 @@
 ---
+import ThemePicker from './ThemePicker';
 const today = new Date();
 ---
 
 <footer class="landing-footer">
 	<a class="landing-brand" href="/" aria-label="Kinfolk home"><img src="/logo.svg" alt="" /> <span>kinfolk</span></a>
 	<span>&copy; {today.getFullYear()} Kinfolk. Made for keepsakes.</span>
+	<ThemePicker compact client:load />
 </footer>

@@ -1,5 +1,4 @@
-import AppearanceSettings from './AppearanceSettings';
-import { initializeTheme } from '../lib/theme';
+import ThemePicker from './ThemePicker';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { configureSupabaseClient, createSupabaseClient, getSupabaseErrorMessage, PHOTO_BUCKET } from '../lib/supabase';
@@ -117,7 +116,6 @@ function toComment(comment: CommentRow): CommentDocument {
 }
 
 export default function FamilyApp({ view = 'feed', personId, collectionId }: FamilyAppProps) {
-	useEffect(() => initializeTheme(), []);
 	const [status, setStatus] = useState<AppStatus>('loading');
 	const [user, setUser] = useState<AppUser | null>(null);
 	const [isAdmin, setIsAdmin] = useState(false);
@@ -408,6 +406,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 						<span>Set <code>PUBLIC_SUPABASE_URL</code> and <code>PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> in this app's runtime environment.</span>
 					</div>
 					<a className="text-link" href="https://supabase.com/docs/guides/getting-started" target="_blank" rel="noreferrer">Read the Supabase setup guide <AppIcon name="arrow" size={16} /></a>
+					<ThemePicker compact />
 				</div>
 			</main>
 		);
@@ -449,6 +448,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 								{authMode === 'login' ? 'Create an account' : 'Sign in'}
 							</button>
 						</p>
+						<ThemePicker compact />
 						<div className="private-note"><AppIcon name="lock" size={15} /> Just for your family. Always.</div>
 					</div>
 				</section>
@@ -551,7 +551,7 @@ export default function FamilyApp({ view = 'feed', personId, collectionId }: Fam
 						<div className="page-heading">
 							<div><div className="eyebrow">Make Kinfolk feel like yours</div><h1>General settings</h1><p className="muted">Manage your family album preferences.</p></div>
 						</div>
-						<AppearanceSettings />
+						<ThemePicker />
 						<FamilyManagement familyId={activeFamilyId} isAdmin={isAdmin} />
 						{isAdmin && <div className="admin-review-tools"><div className="admin-review-heading"><div className="eyebrow">Admin tools</div></div><ClaimRequestsPanel familyId={activeFamilyId} profiles={profiles} onReviewed={loadFamilyData} /><ReportReviewPanel familyId={activeFamilyId} /></div>}
 						<section className="family-management">
